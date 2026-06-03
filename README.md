@@ -16,6 +16,7 @@ short mobile interview, recruiter review, and AI summary workflow.
 - `/spark/recruiter` shows the internal recruiter review queue.
 - `PATCH /api/spark/applications/[applicationId]` records recruiter notes,
   approval, interview invite, and decline actions.
+- Cloudflare Tunnel config is available for `spark.tcwglobal.com`.
 - Prisma models now separate Spark postings, candidate profiles, and
   applications from the legacy app data.
 - `staffing-studio-hub` contains the matching Staffing Studio publish function
@@ -97,6 +98,8 @@ existing `.env` value until you intentionally migrate or recreate the database.
   receiver
 - `prisma/schema.prisma` - Spark posting/application/profile models
 - `docs/spark-local-setup.md` - local setup details
+- `docs/cloudflare-spark-hosting.md` - Cloudflare Tunnel setup for
+  `spark.tcwglobal.com`
 - `staffing-studio-hub/supabase/functions/spark-jd-publish/index.ts` -
   Staffing Studio publish function
 

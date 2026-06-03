@@ -1,0 +1,10 @@
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: staffingnation-spark-cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    # Docker Desktop exposes the Windows/macOS host here, so the tunnel can
+    # reach the Spark dev server running at http://localhost:3000.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

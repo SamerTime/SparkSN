@@ -5,6 +5,8 @@ import prisma from "@/lib/prisma";
 import { Button } from "@/components/ui/button";
 import { SparkApplyForm } from "@/components/spark/SparkApplyForm";
 
+export const dynamic = "force-dynamic";
+
 function money(min: unknown, max: unknown, currency = "USD") {
   const minimum = min == null ? null : Number(min);
   const maximum = max == null ? null : Number(max);

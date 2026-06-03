@@ -4,6 +4,8 @@ import { ArrowLeft, Camera, CheckCircle2, MapPin, Mic, ShieldCheck } from "lucid
 import prisma from "@/lib/prisma";
 import { Button } from "@/components/ui/button";
 
+export const dynamic = "force-dynamic";
+
 function splitText(value: string | null) {
   if (!value) return [];
   return value

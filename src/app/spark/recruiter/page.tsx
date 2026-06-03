@@ -13,6 +13,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SparkRecruiterActions } from "@/components/spark/SparkRecruiterActions";
 
+export const dynamic = "force-dynamic";
+
 type CommunicationEvent = {
   type?: string;
   label?: string;
