@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle, Home, Building2, Clock, ArrowRight } from "lucide-react";
+import { AlertCircle, ArrowRight, BriefcaseBusiness, Clock, Home } from "lucide-react";
 
 export default function NotFound() {
   const { data: session } = useSession();
@@ -26,9 +26,9 @@ export default function NotFound() {
 
     const redirectTimer = setTimeout(() => {
       if (session) {
-        router.push("/companies");
+        router.push("/spark/recruiter");
       } else {
-        router.push("/");
+        router.push("/jobs");
       }
     }, 5000);
 
@@ -39,16 +39,16 @@ export default function NotFound() {
   }, [session, router]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-white flex items-center justify-center p-4">
-      <Card className="w-full max-w-md border-0 shadow-lg rounded-2xl overflow-hidden">
-        <div className="bg-blue-600 p-1"></div>
+    <div className="flex min-h-screen items-center justify-center bg-[#f7f4ef] p-4">
+      <Card className="w-full max-w-md overflow-hidden rounded-md border border-[#d8d1c6] shadow-sm">
+        <div className="bg-[#176c5d] p-1"></div>
 
         <CardContent className="p-6">
           <div className="text-center space-y-6">
             <div className="space-y-2">
               <div className="flex justify-center">
-                <div className="bg-blue-100 p-4 rounded-full">
-                  <AlertCircle className="h-12 w-12 text-blue-600" />
+                <div className="rounded-full bg-[#edf5f1] p-4">
+                  <AlertCircle className="h-12 w-12 text-[#176c5d]" />
                 </div>
               </div>
               <h1 className="text-4xl font-bold text-gray-800">404</h1>
@@ -57,8 +57,8 @@ export default function NotFound() {
               </h2>
             </div>
 
-            <Alert variant="default" className="bg-blue-50 border-blue-200">
-              <AlertDescription className="text-blue-800">
+            <Alert variant="default" className="border-[#d8d1c6] bg-[#fdfaf4]">
+              <AlertDescription className="text-[#59616b]">
                 The page you&apos;re looking for doesn&apos;t exist or has been
                 moved.
               </AlertDescription>
@@ -68,7 +68,7 @@ export default function NotFound() {
               <Clock className="h-5 w-5" />
               <p className="text-sm">
                 Redirecting in{" "}
-                <span className="font-bold text-blue-600">{countdown}</span>{" "}
+                <span className="font-bold text-[#176c5d]">{countdown}</span>{" "}
                 seconds...
               </p>
             </div>
@@ -79,21 +79,21 @@ export default function NotFound() {
           <Button
             onClick={() => {
               if (session) {
-                router.push("/companies");
+                router.push("/spark/recruiter");
               } else {
-                router.push("/");
+                router.push("/jobs");
               }
             }}
-            className="w-full bg-blue-600 hover:bg-blue-700"
+            className="w-full bg-[#20282d] hover:bg-[#344047]"
           >
             {session ? (
               <>
-                Go to Companies
-                <Building2 className="ml-2 h-4 w-4" />
+                Go to recruiter review
+                <BriefcaseBusiness className="ml-2 h-4 w-4" />
               </>
             ) : (
               <>
-                Go to Homepage
+                Go to jobs
                 <Home className="ml-2 h-4 w-4" />
               </>
             )}

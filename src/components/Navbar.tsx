@@ -52,7 +52,7 @@ export default function Navbar() {
                 size="sm"
                 className="hidden text-[#4f5963] hover:bg-[#f0eadf] hover:text-[#15191e] sm:inline-flex"
               >
-                <Link href="/companies">Recruiter workspace</Link>
+                <Link href="/spark/recruiter">Recruiter review</Link>
               </Button>
             )}
 

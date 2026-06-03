@@ -12,6 +12,10 @@ short mobile interview, recruiter review, and AI summary workflow.
   payloads and upserts Spark postings.
 - `/jobs` lists published Spark roles.
 - `/jobs/[slug]` shows full role details and the planned Spark apply path.
+- `/jobs/[slug]/apply` creates a Spark candidate profile and application.
+- `/spark/recruiter` shows the internal recruiter review queue.
+- `PATCH /api/spark/applications/[applicationId]` records recruiter notes,
+  approval, interview invite, and decline actions.
 - Prisma models now separate Spark postings, candidate profiles, and
   applications from the legacy app data.
 - `staffing-studio-hub` contains the matching Staffing Studio publish function
@@ -86,7 +90,11 @@ existing `.env` value until you intentionally migrate or recreate the database.
 
 - `src/app/jobs/page.tsx` - public published jobs list
 - `src/app/jobs/[slug]/page.tsx` - public job detail page
+- `src/app/jobs/[slug]/apply/page.tsx` - public candidate apply form
+- `src/app/spark/recruiter/page.tsx` - internal recruiter review queue
 - `src/app/api/spark/job-postings/route.ts` - StaffingNation publish receiver
+- `src/app/api/spark/applications/route.ts` - Spark candidate application
+  receiver
 - `prisma/schema.prisma` - Spark posting/application/profile models
 - `docs/spark-local-setup.md` - local setup details
 - `staffing-studio-hub/supabase/functions/spark-jd-publish/index.ts` -

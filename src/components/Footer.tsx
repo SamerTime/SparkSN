@@ -47,10 +47,10 @@ export default function Footer() {
               </li>
               <li>
                 <Link
-                  href="/companies"
+                  href="/spark/recruiter"
                   className="transition hover:text-[#15191e]"
                 >
-                  Recruiter workspace
+                  Recruiter review
                 </Link>
               </li>
             </ul>

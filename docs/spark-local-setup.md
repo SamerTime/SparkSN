@@ -35,6 +35,12 @@ Spark JD receiver:
 http://localhost:3000/api/spark/job-postings
 ```
 
+Spark recruiter review:
+
+```text
+http://localhost:3000/spark/recruiter
+```
+
 Public jobs base URL for generated posting links:
 
 ```text
@@ -123,13 +129,27 @@ pnpm dev
 }
 ```
 
+## Public Apply Test
+
+After a job appears on `/jobs`, open its detail page and choose `Start
+application`. The apply page creates or updates:
+
+- `SparkCandidateProfile`
+- `SparkApplication`
+- consent timestamps
+- location/device signal JSON
+- communication event JSON for later Courier delivery
+
+Recruiter review actions are available at:
+
+```text
+http://localhost:3000/spark/recruiter
+```
+
 ## Next Build Slices
 
-1. Public `/jobs` list and `/jobs/[slug]` detail pages styled after
-   `tcwtable.com/jobs`.
-2. Candidate profile/apply flow.
-3. Recruiter review queue with approve/invite/decline.
-4. Mobile camera/microphone readiness and interview consent.
-5. AI question generation and interview session.
-6. Media storage and location/device risk signals.
-7. Courier-driven candidate/recruiter communications.
+1. Mobile camera/microphone readiness and interview consent.
+2. AI question generation and interview session.
+3. Media storage and stronger location/device risk scoring.
+4. Courier-driven candidate/recruiter communications.
+5. Auth and permission hardening for the recruiter review queue.

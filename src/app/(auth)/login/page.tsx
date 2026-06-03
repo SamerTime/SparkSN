@@ -38,7 +38,7 @@ export default function LoginPage() {
       });
       console.log(response);
       toast.success("Logged in successfully!");
-      router.push("/companies");
+      router.push("/spark/recruiter");
     } catch (error) {
       console.log(error);
       setError("Something went wrong. Please try again.");
@@ -50,7 +50,7 @@ export default function LoginPage() {
 
   const handleOAuthSignIn = async (provider: "google") => {
     setLoading(true);
-    await signIn(provider, { callbackUrl: "/companies" });
+    await signIn(provider, { callbackUrl: "/spark/recruiter" });
     setLoading(false);
   };
 

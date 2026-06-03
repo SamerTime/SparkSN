@@ -111,8 +111,10 @@ export default async function JobDetailPage({
                   AI summary for recruiter review
                 </div>
               </div>
-              <Button className="mt-6 w-full bg-[#20282d] text-white hover:bg-[#344047]">
-                Start application
+              <Button asChild className="mt-6 w-full bg-[#20282d] text-white hover:bg-[#344047]">
+                <Link href={`/jobs/${job.slug}/apply`}>
+                  Start application
+                </Link>
               </Button>
               <p className="mt-3 text-xs leading-5 text-[#6e7680]">
                 Candidate profile, consent, camera/microphone check, and fraud signal capture are the next build slice.

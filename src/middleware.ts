@@ -7,11 +7,11 @@ export const middleware = async (req: NextRequest) => {
   const url = req.nextUrl;
 
   if (token && (url.pathname === "/login" || url.pathname === "/")) {
-    return NextResponse.redirect(new URL("/companies", req.url));
+    return NextResponse.redirect(new URL("/spark/recruiter", req.url));
   }
 
   if (token && url.pathname === "/signup") {
-    return NextResponse.redirect(new URL("/profile", req.url));
+    return NextResponse.redirect(new URL("/spark/recruiter", req.url));
   }
 
   if (
@@ -29,19 +29,19 @@ export const middleware = async (req: NextRequest) => {
     const userRole = token.role as string;
 
     if (userRole === "applicant" && url.pathname.startsWith("/analysis/")) {
-      return NextResponse.redirect(new URL("/companies", req.url));
+      return NextResponse.redirect(new URL("/spark/recruiter", req.url));
     }
 
     if (userRole === "recruiter" && url.pathname.startsWith("/feedback/")) {
-      return NextResponse.redirect(new URL("/companies", req.url));
+      return NextResponse.redirect(new URL("/spark/recruiter", req.url));
     }
 
     if (userRole === "applicant" && url.pathname === "/job/create") {
-      return NextResponse.redirect(new URL("/companies", req.url));
+      return NextResponse.redirect(new URL("/jobs", req.url));
     }
 
     if (userRole === "recruiter" && url.pathname.startsWith("/feedback/")) {
-      return NextResponse.redirect(new URL("/companies", req.url));
+      return NextResponse.redirect(new URL("/spark/recruiter", req.url));
     }
   }
 
