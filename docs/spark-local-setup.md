@@ -91,6 +91,15 @@ pnpm prisma migrate deploy
 pnpm prisma generate
 ```
 
+In this Codex Windows workspace, use the repo-local pnpm binary and put the
+bundled Node runtime first on PATH before Prisma commands:
+
+```powershell
+$env:PATH="C:\Users\samer\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin;$env:PATH"
+tools\pnpm.exe prisma migrate deploy
+tools\pnpm.exe prisma generate
+```
+
 Run Spark:
 
 ```bash
