@@ -23,6 +23,7 @@ Add these to local `.env` and to the production host secrets:
 ```env
 SUPABASE_URL="https://xmidhrqlfsnkhoadpgsh.supabase.co"
 NEXT_PUBLIC_SUPABASE_URL="https://xmidhrqlfsnkhoadpgsh.supabase.co"
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY="..."
 SUPABASE_ANON_KEY="..."
 SUPABASE_SERVICE_ROLE_KEY="..."
 DATABASE_URL="..."
@@ -37,7 +38,7 @@ Project Settings -> API
 Copy:
 
 - Project URL
-- anon public key
+- publishable key, or anon public key if the dashboard shows the older key name
 - service_role secret key
 
 Use:

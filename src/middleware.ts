@@ -1,17 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
 export { default } from "next-auth/middleware";
 import { getToken } from "next-auth/jwt";
+import {
+  copySupabaseCookies,
+  updateSession,
+} from "@/utils/supabase/middleware";
+
+const redirectWithSupabaseCookies = (
+  req: NextRequest,
+  supabaseResponse: NextResponse,
+  pathname: string
+) => {
+  return copySupabaseCookies(
+    supabaseResponse,
+    NextResponse.redirect(new URL(pathname, req.url))
+  );
+};
 
 export const middleware = async (req: NextRequest) => {
+  const supabaseResponse = await updateSession(req);
   const token = await getToken({ req });
   const url = req.nextUrl;
 
   if (token && (url.pathname === "/login" || url.pathname === "/")) {
-    return NextResponse.redirect(new URL("/spark/recruiter", req.url));
+    return redirectWithSupabaseCookies(req, supabaseResponse, "/spark/recruiter");
   }
 
   if (token && url.pathname === "/signup") {
-    return NextResponse.redirect(new URL("/spark/recruiter", req.url));
+    return redirectWithSupabaseCookies(req, supabaseResponse, "/spark/recruiter");
   }
 
   if (
@@ -22,30 +38,30 @@ export const middleware = async (req: NextRequest) => {
       url.pathname.startsWith("/feedback/") ||
       url.pathname.startsWith("/analysis/"))
   ) {
-    return NextResponse.redirect(new URL("/login", req.url));
+    return redirectWithSupabaseCookies(req, supabaseResponse, "/login");
   }
 
   if (token) {
     const userRole = token.role as string;
 
     if (userRole === "applicant" && url.pathname.startsWith("/analysis/")) {
-      return NextResponse.redirect(new URL("/spark/recruiter", req.url));
+      return redirectWithSupabaseCookies(req, supabaseResponse, "/spark/recruiter");
     }
 
     if (userRole === "recruiter" && url.pathname.startsWith("/feedback/")) {
-      return NextResponse.redirect(new URL("/spark/recruiter", req.url));
+      return redirectWithSupabaseCookies(req, supabaseResponse, "/spark/recruiter");
     }
 
     if (userRole === "applicant" && url.pathname === "/job/create") {
-      return NextResponse.redirect(new URL("/jobs", req.url));
+      return redirectWithSupabaseCookies(req, supabaseResponse, "/jobs");
     }
 
     if (userRole === "recruiter" && url.pathname.startsWith("/feedback/")) {
-      return NextResponse.redirect(new URL("/spark/recruiter", req.url));
+      return redirectWithSupabaseCookies(req, supabaseResponse, "/spark/recruiter");
     }
   }
 
-  return NextResponse.next();
+  return supabaseResponse;
 };
 
 export const config = {
@@ -55,6 +71,8 @@ export const config = {
     "/",
     "/profile",
     "/companies",
+    "/jobs/:path*",
+    "/spark/:path*",
     "/job/:path*",
     "/feedback/:path*",
     "/analysis/:path*",
