@@ -1,0 +1,126 @@
+# Spark Local Setup
+
+## Where This Is Built
+
+Spark is built in this repo (`SN-Spark`) as the public/candidate/recruiter
+module.
+
+StaffingNation / Staffing Studio lives in the sibling checkout:
+
+```text
+staffing-studio-hub/
+```
+
+The integration boundary is:
+
+```text
+StaffingNation JD -> spark-jd-publish edge function -> Spark API receiver
+```
+
+StaffingNation keeps job description and job order source-of-truth data.
+Spark keeps candidate profiles, applications, interview media, AI summaries,
+recruiter notes, comms state, device signals, and location/fraud signals.
+
+## Local URLs
+
+Spark app:
+
+```text
+http://localhost:3000
+```
+
+Spark JD receiver:
+
+```text
+http://localhost:3000/api/spark/job-postings
+```
+
+Public jobs base URL for generated posting links:
+
+```text
+https://tcwtable.com/jobs
+```
+
+## Spark Environment
+
+Create `.env` from `.env.example` and set:
+
+```env
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/hire-iq"
+REDIS_URL="redis://localhost:6379"
+
+NEXTAUTH_URL="http://localhost:3000"
+AUTH_SECRET="replace-me"
+
+SPARK_API_KEY="replace-with-shared-secret"
+SPARK_PUBLIC_JOBS_BASE_URL="https://tcwtable.com/jobs"
+
+OPENAI_API_KEY=
+GEMINI_API_KEY=
+```
+
+## StaffingNation Environment
+
+In `staffing-studio-hub`, configure the Supabase function secrets for local or
+deployed edge functions:
+
+```env
+SPARK_JD_PUBLISH_URL="http://localhost:3000/api/spark/job-postings"
+SPARK_API_KEY="same-value-as-spark"
+SPARK_PUBLIC_JOBS_BASE_URL="https://tcwtable.com/jobs"
+```
+
+## Commands
+
+Install dependencies:
+
+```bash
+pnpm install
+```
+
+Start database/Redis if using Docker:
+
+```bash
+docker-compose up -d
+```
+
+Apply migrations and generate Prisma client:
+
+```bash
+pnpm prisma migrate deploy
+pnpm prisma generate
+```
+
+Run Spark:
+
+```bash
+pnpm dev
+```
+
+## First Integration Test
+
+1. Start Spark on `localhost:3000`.
+2. Set `SPARK_JD_PUBLISH_URL` and `SPARK_API_KEY` in StaffingNation.
+3. In StaffingNation, activate a job description.
+4. Use the JD row menu action `Publish to Spark`.
+5. Spark should upsert a row in `SparkJobPosting` and return:
+
+```json
+{
+  "success": true,
+  "spark_posting_id": "...",
+  "public_url": "https://tcwtable.com/jobs/...",
+  "source_entity_id": "..."
+}
+```
+
+## Next Build Slices
+
+1. Public `/jobs` list and `/jobs/[slug]` detail pages styled after
+   `tcwtable.com/jobs`.
+2. Candidate profile/apply flow.
+3. Recruiter review queue with approve/invite/decline.
+4. Mobile camera/microphone readiness and interview consent.
+5. AI question generation and interview session.
+6. Media storage and location/device risk signals.
+7. Courier-driven candidate/recruiter communications.
