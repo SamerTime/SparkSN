@@ -17,8 +17,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "HireIQ - Your AI Interview Assistant",
-  description: "AI-powered interview assistance",
+  title: "StaffingNation Spark",
+  description:
+    "Published job opportunities and candidate review workflows for StaffingNation.",
 };
 
 export default function RootLayout({

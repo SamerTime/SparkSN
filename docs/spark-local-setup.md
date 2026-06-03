@@ -46,7 +46,7 @@ https://tcwtable.com/jobs
 Create `.env` from `.env.example` and set:
 
 ```env
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/hire-iq"
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/staffingnation_spark"
 REDIS_URL="redis://localhost:6379"
 
 NEXTAUTH_URL="http://localhost:3000"

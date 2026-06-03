@@ -55,15 +55,15 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-white flex items-center justify-center p-4">
-      <Card className="w-full max-w-md border-0 shadow-lg rounded-2xl overflow-hidden">
-        <div className="bg-blue-600 p-1"></div>
+    <div className="flex min-h-screen items-center justify-center bg-[#f7f4ef] p-4">
+      <Card className="w-full max-w-md overflow-hidden rounded-md border border-[#d8d1c6] shadow-sm">
+        <div className="bg-[#176c5d] p-1"></div>
         <CardHeader className="text-center space-y-1">
           <CardTitle className="text-2xl font-bold text-gray-800">
-            Welcome Back to HireIQ
+            Welcome back to StaffingNation Spark
           </CardTitle>
           <CardDescription className="text-gray-500">
-            Login to continue your interview journey
+            Sign in to review jobs, profiles, and recruiter workflows.
           </CardDescription>
         </CardHeader>
 
@@ -163,17 +163,17 @@ export default function LoginPage() {
           <CardFooter className="flex flex-col gap-3 px-6 pb-6 mt-3">
             <Button
               type="submit"
-              className="w-full h-10 bg-blue-600 hover:bg-blue-700 cursor-pointer"
+              className="w-full h-10 cursor-pointer bg-[#20282d] hover:bg-[#344047]"
               disabled={loading}
             >
               {loading ? (
                 <>
                   <Loader2 className="animate-spin mr-2 h-4 w-4" />
-                  Fetching Companies...
+                  Signing in...
                 </>
               ) : (
                 <>
-                  Fetch Companies
+                  Sign in
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </>
               )}
@@ -182,7 +182,7 @@ export default function LoginPage() {
               Don&apos;t have an account?{" "}
               <Link
                 href="/signup"
-                className="font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                className="font-medium text-[#176c5d] hover:text-[#14594d] hover:underline"
               >
                 Sign up
               </Link>

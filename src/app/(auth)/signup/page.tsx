@@ -33,7 +33,7 @@ export default function SignUpPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!role) {
-      toast.error("Please select a role (Job Seeker or Recruiter)");
+      toast.error("Please select a role (Candidate or Recruiter)");
       return;
     }
     setLoading(true);
@@ -78,15 +78,15 @@ export default function SignUpPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-white flex items-center justify-center p-4">
-      <Card className="w-full max-w-md border-0 shadow-lg rounded-2xl overflow-hidden">
-        <div className="bg-blue-600 p-1"></div>
+    <div className="flex min-h-screen items-center justify-center bg-[#f7f4ef] p-4">
+      <Card className="w-full max-w-md overflow-hidden rounded-md border border-[#d8d1c6] shadow-sm">
+        <div className="bg-[#176c5d] p-1"></div>
         <CardHeader className="text-center space-y-1">
           <CardTitle className="text-2xl font-bold text-gray-800">
-            Join HireIQ
+            Create Spark account
           </CardTitle>
           <CardDescription className="text-gray-500">
-            Create your account to get started
+            Build a profile for StaffingNation-published roles.
           </CardDescription>
         </CardHeader>
 
@@ -103,17 +103,17 @@ export default function SignUpPage() {
                 type="button"
                 variant={role === "applicant" ? "default" : "outline"}
                 className={`flex-1 py-2 ${
-                  role === "applicant" ? "bg-blue-600 hover:bg-blue-700" : ""
+                  role === "applicant" ? "bg-[#176c5d] hover:bg-[#14594d]" : ""
                 }`}
                 onClick={() => setRole("applicant")}
               >
-                Job Seeker
+                Candidate
               </Button>
               <Button
                 type="button"
                 variant={role === "recruiter" ? "default" : "outline"}
                 className={`flex-1 py-2 ${
-                  role === "recruiter" ? "bg-blue-600 hover:bg-blue-700" : ""
+                  role === "recruiter" ? "bg-[#176c5d] hover:bg-[#14594d]" : ""
                 }`}
                 onClick={() => setRole("recruiter")}
               >
@@ -206,7 +206,7 @@ export default function SignUpPage() {
           <CardFooter className="flex flex-col gap-3 px-6 pb-6">
             <Button
               type="submit"
-              className="w-full h-10 bg-blue-600 hover:bg-blue-700 cursor-pointer"
+              className="w-full h-10 cursor-pointer bg-[#20282d] hover:bg-[#344047]"
               disabled={loading}
             >
               {loading ? (
@@ -225,7 +225,7 @@ export default function SignUpPage() {
               Already have an account?{" "}
               <Link
                 href="/login"
-                className="font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                className="font-medium text-[#176c5d] hover:text-[#14594d] hover:underline"
               >
                 Sign in
               </Link>
