@@ -19,7 +19,8 @@ Repository: SamerTime/SparkSN
 Branch: main
 Root directory: /
 Build command: pnpm run build:worker
-Deploy command: npx wrangler deploy
+Deploy command: pnpm run deploy:worker
+Version command: pnpm run upload:worker
 ```
 
 The repo contains:

@@ -115,5 +115,6 @@ Cloudflare Workers build settings:
 
 ```text
 Build command: pnpm run build:worker
-Deploy command: npx wrangler deploy
+Deploy command: pnpm run deploy:worker
+Version command: pnpm run upload:worker
 ```
