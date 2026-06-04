@@ -90,15 +90,50 @@ function locationSummary(value: unknown) {
   const signals = jsonObject(value);
   const browserLocation = jsonObject(signals.browserGeolocation);
   const providedLocation = jsonObject(signals.candidateProvidedLocation);
+  const capture = jsonObject(signals.capture);
+  const captureStatus =
+    typeof capture.status === "string" ? capture.status : "";
 
   if (typeof browserLocation.latitude === "number") {
-    return "Browser location captured";
+    return {
+      label: "Browser location captured",
+      needsReview: false,
+    };
+  }
+
+  if (captureStatus === "denied") {
+    return {
+      label: "Browser location permission denied",
+      needsReview: true,
+    };
+  }
+
+  if (captureStatus === "unsupported") {
+    return {
+      label: "Browser does not support location capture",
+      needsReview: true,
+    };
+  }
+
+  if (captureStatus === "error") {
+    return {
+      label: "Browser location capture failed",
+      needsReview: true,
+    };
   }
 
   const city = typeof providedLocation.city === "string" ? providedLocation.city : "";
   const state = typeof providedLocation.state === "string" ? providedLocation.state : "";
   const place = [city, state].filter(Boolean).join(", ");
-  return place ? `Candidate entered ${place}` : "Location needs review";
+  return place
+    ? {
+        label: `Candidate entered ${place}; browser location not captured`,
+        needsReview: true,
+      }
+    : {
+        label: "Location needs review",
+        needsReview: true,
+      };
 }
 
 function statusClass(status: string) {
@@ -309,7 +344,7 @@ export default async function SparkRecruiterPage() {
                 | RecordingView
                 | null;
               const location = locationSummary(application.locationSignals);
-              const needsLocationReview = location === "Location needs review";
+              const needsLocationReview = location.needsReview;
               const candidateName =
                 application.candidateName ||
                 [
@@ -406,7 +441,7 @@ export default async function SparkRecruiterPage() {
                                 : "mt-2 text-sm font-bold leading-6 text-[var(--sn-success)]"
                             }
                           >
-                            {location}
+                            {location.label}
                           </p>
                           {needsLocationReview && (
                             <p className="mt-2 text-xs leading-5 text-[var(--sn-coral-600)]">

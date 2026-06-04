@@ -31,6 +31,15 @@ type LocationCapture = {
   accuracy: number | null;
 };
 
+type LocationCaptureState =
+  | "idle"
+  | "ready"
+  | "capturing"
+  | "captured"
+  | "denied"
+  | "unsupported"
+  | "error";
+
 type Submission = {
   applicationId: string;
   status: string;
@@ -48,8 +57,10 @@ export function SparkApplyForm({
   const [loading, setLoading] = useState(false);
   const [capturingLocation, setCapturingLocation] = useState(false);
   const [location, setLocation] = useState<LocationCapture | null>(null);
+  const [locationCaptureState, setLocationCaptureState] =
+    useState<LocationCaptureState>("idle");
   const [locationStatus, setLocationStatus] = useState(
-    "Location can be captured from the phone/browser after consent."
+    "Check location consent below to enable capture."
   );
   const [submission, setSubmission] = useState<Submission | null>(null);
   const [form, setForm] = useState({
@@ -75,18 +86,36 @@ export function SparkApplyForm({
     setForm((current) => ({ ...current, [field]: value }));
   };
 
+  const updateGeolocationConsent = (checked: boolean) => {
+    updateField("geolocationConsent", checked);
+    setLocation(null);
+    setLocationCaptureState(checked ? "ready" : "idle");
+    setLocationStatus(
+      checked
+        ? "Consent checked. Tap capture location and allow the browser prompt."
+        : "Check location consent below to enable capture."
+    );
+  };
+
   const captureLocation = () => {
     if (!form.geolocationConsent) {
+      setLocationCaptureState("idle");
+      setLocationStatus("Check location consent below to enable capture.");
       toast.error("Please consent to location review first.");
       return;
     }
 
     if (!navigator.geolocation) {
-      setLocationStatus("This browser does not support location capture.");
+      setLocation(null);
+      setLocationCaptureState("unsupported");
+      setLocationStatus(
+        "This browser does not support location capture. Recruiter review will use the city/state you entered."
+      );
       return;
     }
 
     setCapturingLocation(true);
+    setLocationCaptureState("capturing");
     setLocationStatus("Requesting browser location...");
     navigator.geolocation.getCurrentPosition(
       (position) => {
@@ -98,6 +127,7 @@ export function SparkApplyForm({
             : null,
         };
         setLocation(nextLocation);
+        setLocationCaptureState("captured");
         setLocationStatus(
           `Location captured with about ${
             nextLocation.accuracy ? Math.round(nextLocation.accuracy) : "unknown"
@@ -107,7 +137,18 @@ export function SparkApplyForm({
       },
       (error) => {
         setLocation(null);
-        setLocationStatus(error.message || "Location capture was not approved.");
+        if (error.code === error.PERMISSION_DENIED) {
+          setLocationCaptureState("denied");
+          setLocationStatus(
+            "Browser permission was denied. Allow location in site settings and try again, or submit for recruiter review with manual city/state."
+          );
+        } else {
+          setLocationCaptureState("error");
+          setLocationStatus(
+            error.message ||
+              "Location capture was not completed. Recruiter review will use the city/state you entered."
+          );
+        }
         setCapturingLocation(false);
       },
       {
@@ -131,6 +172,11 @@ export function SparkApplyForm({
           postingSlug,
           ...form,
           location,
+          locationCapture: {
+            status: locationCaptureState,
+            message: locationStatus,
+            captured: Boolean(location),
+          },
           browser: {
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
             language: navigator.language,
@@ -202,6 +248,29 @@ export function SparkApplyForm({
       </div>
     );
   }
+
+  const locationTone =
+    locationCaptureState === "captured"
+      ? "border-[#bde8ce] bg-[var(--sn-success-50)]"
+      : locationCaptureState === "denied" ||
+          locationCaptureState === "unsupported" ||
+          locationCaptureState === "error"
+        ? "border-[var(--sn-coral-100)] bg-[var(--sn-coral-50)]"
+        : "border-[var(--sn-line)] bg-white";
+  const locationIconTone =
+    locationCaptureState === "captured"
+      ? "text-[var(--sn-success)]"
+      : locationCaptureState === "denied" ||
+          locationCaptureState === "unsupported" ||
+          locationCaptureState === "error"
+        ? "text-[var(--sn-coral-600)]"
+        : "text-[var(--sn-success)]";
+  const locationButtonLabel =
+    locationCaptureState === "captured"
+      ? "Refresh location"
+      : locationCaptureState === "denied"
+        ? "Try location again"
+        : "Capture location";
 
   return (
     <form onSubmit={submit} className="flex min-h-[720px] flex-col bg-[var(--sn-soft)]">
@@ -403,9 +472,9 @@ export function SparkApplyForm({
                 </p>
               </div>
             </div>
-            <div className="rounded-lg border border-[var(--sn-line)] bg-white p-3">
+            <div className={`rounded-lg border p-3 ${locationTone}`}>
               <div className="flex items-start gap-3">
-                <LocateFixed className="mt-0.5 h-5 w-5 shrink-0 text-[var(--sn-success)]" />
+                <LocateFixed className={`mt-0.5 h-5 w-5 shrink-0 ${locationIconTone}`} />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-bold text-[var(--sn-ink)]">
                     Location signal
@@ -420,14 +489,16 @@ export function SparkApplyForm({
                 variant="outline"
                 className="mt-3 h-10 w-full border-[var(--sn-line)]"
                 onClick={captureLocation}
-                disabled={capturingLocation}
+                disabled={capturingLocation || !form.geolocationConsent}
               >
                 {capturingLocation ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
+                ) : locationCaptureState === "captured" ? (
+                  <CheckCircle2 className="h-4 w-4" />
                 ) : (
                   <LocateFixed className="h-4 w-4" />
                 )}
-                Capture location
+                {locationButtonLabel}
               </Button>
             </div>
           </div>
@@ -470,14 +541,14 @@ export function SparkApplyForm({
                 type="checkbox"
                 checked={form.geolocationConsent}
                 onChange={(event) =>
-                  updateField("geolocationConsent", event.target.checked)
+                  updateGeolocationConsent(event.target.checked)
                 }
                 className="mt-1 h-4 w-4 shrink-0 accent-[var(--sn-blue)]"
                 required
               />
               <span>
-                I consent to location capture for identity, fraud, and job-fit
-                review.
+                I consent to Spark requesting browser location for identity,
+                fraud, and job-fit review.
               </span>
             </label>
           </div>

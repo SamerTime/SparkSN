@@ -111,11 +111,16 @@ export async function POST(request: NextRequest) {
     }
 
     const location = jsonObject(body.location);
+    const locationCapture = jsonObject(body.locationCapture);
     const browserInput = jsonObject(body.browser);
     const screenInput = jsonObject(browserInput.screen);
     const latitude = numberValue(location.latitude);
     const longitude = numberValue(location.longitude);
     const accuracy = numberValue(location.accuracy);
+    const locationCaptureStatus =
+      stringValue(locationCapture.status) ||
+      (latitude !== null && longitude !== null ? "captured" : "not_captured");
+    const locationCaptureMessage = stringValue(locationCapture.message);
     const browserSignals = {
       timeZone: stringValue(browserInput.timeZone),
       language: stringValue(browserInput.language),
@@ -158,6 +163,8 @@ export async function POST(request: NextRequest) {
       fraudReviewData: {
         locationCaptured: Boolean(browserLocation),
         locationCaptureAt: browserLocation ? now : null,
+        locationCaptureStatus,
+        locationCaptureMessage,
       },
     });
 
@@ -175,6 +182,11 @@ export async function POST(request: NextRequest) {
       },
       browserGeolocation: browserLocation,
       consentAt: now,
+      capture: {
+        status: browserLocation ? "captured" : locationCaptureStatus,
+        message: locationCaptureMessage,
+        captured: Boolean(browserLocation),
+      },
       fraudReview: {
         needsLocationReview: !browserLocation,
         reason: browserLocation
