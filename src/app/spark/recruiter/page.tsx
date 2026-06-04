@@ -3,6 +3,7 @@ import {
   ArrowRight,
   BriefcaseBusiness,
   CheckCircle2,
+  ClipboardList,
   Clock3,
   MailCheck,
   MapPin,
@@ -46,6 +47,11 @@ type RecordingView = RecordingReference & {
   signedUrl: string;
 };
 
+type InterviewAnswer = {
+  question: string;
+  answer: string;
+};
+
 function jsonObject(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -57,6 +63,19 @@ function communicationEvents(value: unknown): CommunicationEvent[] {
   return Array.isArray(state.events)
     ? (state.events as CommunicationEvent[]).slice(-4).reverse()
     : [];
+}
+
+function interviewAnswers(value: unknown): InterviewAnswer[] {
+  const transcript = jsonObject(value);
+  if (!Array.isArray(transcript.answers)) return [];
+
+  return transcript.answers
+    .map((item) => jsonObject(item))
+    .map((item) => ({
+      question: typeof item.question === "string" ? item.question.trim() : "",
+      answer: typeof item.answer === "string" ? item.answer.trim() : "",
+    }))
+    .filter((item) => item.question && item.answer);
 }
 
 function numberValue(value: unknown) {
@@ -340,6 +359,7 @@ export default async function SparkRecruiterPage() {
           <div className="grid gap-4">
             {applications.map((application) => {
               const events = communicationEvents(application.communicationState);
+              const answers = interviewAnswers(application.interviewTranscript);
               const recordingView = recordingViewsById.get(application.id) as
                 | RecordingView
                 | null;
@@ -450,6 +470,35 @@ export default async function SparkRecruiterPage() {
                           )}
                         </section>
                       </div>
+
+                      {answers.length > 0 && (
+                        <section className="mt-4 rounded-lg border border-[var(--sn-line)] bg-white p-4">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex items-center gap-2 text-sm font-extrabold text-[var(--sn-ink)]">
+                              <ClipboardList className="h-4 w-4 text-[var(--sn-blue)]" />
+                              Interview answers
+                            </div>
+                            <span className="sn-chip py-1 text-xs">
+                              {answers.length} {answers.length === 1 ? "answer" : "answers"}
+                            </span>
+                          </div>
+                          <ol className="mt-3 divide-y divide-[var(--sn-line)]">
+                            {answers.map((item, index) => (
+                              <li
+                                key={`${item.question}-${index}`}
+                                className="py-3 first:pt-0 last:pb-0"
+                              >
+                                <p className="text-sm font-extrabold leading-6 text-[var(--sn-ink)]">
+                                  {index + 1}. {item.question}
+                                </p>
+                                <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-[var(--sn-muted)]">
+                                  {item.answer}
+                                </p>
+                              </li>
+                            ))}
+                          </ol>
+                        </section>
+                      )}
 
                       {recordingView && (
                         <section className="mt-4 rounded-lg border border-[var(--sn-line)] bg-white p-4">

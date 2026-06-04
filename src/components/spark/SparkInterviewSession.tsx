@@ -411,6 +411,15 @@ export function SparkInterviewSession({
                 </p>
               </div>
             </div>
+            <div className="mt-3 rounded-lg border border-[var(--sn-coral-100)] bg-[var(--sn-coral-50)] p-3">
+              <p className="text-sm font-extrabold text-[var(--sn-coral-600)]">
+                This is a recorded screening
+              </p>
+              <p className="mt-1 text-xs leading-5 text-[var(--sn-coral-600)]">
+                When you tap Start recorded screening, Spark records your camera,
+                microphone, and typed answers until you submit the interview.
+              </p>
+            </div>
           </section>
         </div>
 
@@ -426,7 +435,7 @@ export function SparkInterviewSession({
             ) : (
               <Play className="h-4 w-4" />
             )}
-            Start screening
+            Start recorded screening
           </Button>
         </div>
       </div>
@@ -464,7 +473,11 @@ export function SparkInterviewSession({
       </header>
 
       <div className="flex-1 space-y-4 px-4 py-4">
-        <section className="overflow-hidden rounded-lg bg-[#111827]">
+        <section className="relative overflow-hidden rounded-lg bg-[#111827]">
+          <div className="absolute left-3 top-3 z-10 inline-flex items-center gap-2 rounded-full bg-[var(--sn-danger)] px-3 py-1 text-xs font-extrabold text-white shadow-sm">
+            <span className="h-2 w-2 rounded-full bg-white" />
+            Recording video and audio
+          </div>
           <video
             ref={videoRef}
             className="aspect-[4/3] w-full object-cover"
@@ -482,7 +495,7 @@ export function SparkInterviewSession({
             value={currentAnswer}
             onChange={(event) => setCurrentAnswer(event.target.value)}
             className="sn-input mt-4 min-h-36 w-full px-3 py-2 text-sm"
-            placeholder="Answer in your own words while the session records."
+            placeholder="Answer in your own words. Your typed answer is saved with the recorded screening."
           />
         </section>
       </div>
@@ -510,7 +523,7 @@ export function SparkInterviewSession({
             ) : (
               <Send className="h-4 w-4" />
             )}
-            Submit screening
+            {loading ? "Saving recording" : "Submit recorded screening"}
           </Button>
         ) : (
           <Button
