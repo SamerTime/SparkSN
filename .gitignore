@@ -38,9 +38,6 @@ staffing-studio-hub/
 .env
 .env*.local
 
-# vercel
-.vercel
-
 # typescript
 *.tsbuildinfo
 next-env.d.ts

@@ -5,7 +5,6 @@ on:
   push:
     branches:
       - main
-      - spark-module-setup
     paths:
       - ".github/workflows/supabase-prisma-migrate.yml"
       - "package.json"
