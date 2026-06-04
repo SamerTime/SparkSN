@@ -105,8 +105,19 @@ export type SparkApplicationWithRelations = SparkApplication & {
 
 export type SparkRecruiterActionApplication = Pick<
   SparkApplication,
-  "id" | "communicationState" | "status"
->;
+  | "id"
+  | "communicationState"
+  | "status"
+  | "postingId"
+  | "candidateEmail"
+  | "candidateName"
+  | "candidatePhone"
+> & {
+  posting: Pick<
+    SparkJobPosting,
+    "id" | "title" | "slug" | "clientName" | "publicUrl"
+  > | null;
+};
 
 export type SparkPublishedJobListItem = Pick<
   SparkJobPosting,
@@ -505,14 +516,32 @@ export async function updateApplication(
 export async function getApplicationForRecruiterAction(
   applicationId: string
 ): Promise<SparkRecruiterActionApplication | null> {
-  const { data, error } = await getSparkSupabase()
+  const supabase = getSparkSupabase();
+  const { data, error } = await supabase
     .from("SparkApplication")
-    .select("id,communicationState,status")
+    .select(
+      "id,communicationState,status,postingId,candidateEmail,candidateName,candidatePhone"
+    )
     .eq("id", applicationId)
     .maybeSingle();
 
   if (error) fail(error, "Unable to load Spark application");
-  return data as unknown as SparkRecruiterActionApplication | null;
+  if (!data) return null;
+
+  const postingResponse = await supabase
+    .from("SparkJobPosting")
+    .select("id,title,slug,clientName,publicUrl")
+    .eq("id", data.postingId)
+    .maybeSingle();
+
+  if (postingResponse.error) {
+    fail(postingResponse.error, "Unable to load Spark application posting");
+  }
+
+  return {
+    ...data,
+    posting: postingResponse.data || null,
+  } as unknown as SparkRecruiterActionApplication;
 }
 
 export async function listRecruiterApplications() {

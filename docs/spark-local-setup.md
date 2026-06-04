@@ -60,6 +60,10 @@ SUPABASE_SERVICE_ROLE_KEY="..."
 SPARK_API_KEY="replace-with-shared-secret"
 SPARK_PUBLIC_JOBS_BASE_URL="https://spark.tcwglobal.com/jobs"
 
+COURIER_AUTH_TOKEN=
+COURIER_POSTMARK_FROM_EMAIL=tasky@tcwglobal.com
+COURIER_POSTMARK_MESSAGE_STREAM=
+
 OPENAI_API_KEY=
 ```
 
@@ -152,5 +156,5 @@ http://localhost:3000/spark/recruiter
 1. Mobile camera/microphone readiness and interview consent.
 2. AI question generation and interview session.
 3. Media storage and stronger location/device risk scoring.
-4. Courier-driven candidate/recruiter communications.
+4. Expand Courier-driven communications beyond interview invite email.
 5. Auth and permission hardening for the recruiter review queue.

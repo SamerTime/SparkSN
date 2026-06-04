@@ -11,7 +11,8 @@
     "SUPABASE_URL": "https://xmidhrqlfsnkhoadpgsh.supabase.co",
     "NEXT_PUBLIC_SUPABASE_URL": "https://xmidhrqlfsnkhoadpgsh.supabase.co",
     "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhtaWRocnFsZnNua2hvYWRwZ3NoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1Mjc4OTIsImV4cCI6MjA5NjEwMzg5Mn0.oedcQ3sAIq_kFSE8ABwKUA6ddBjOQD7M6WrY6wxqpaU",
-    "SPARK_PUBLIC_JOBS_BASE_URL": "https://spark.tcwglobal.com/jobs"
+    "SPARK_PUBLIC_JOBS_BASE_URL": "https://spark.tcwglobal.com/jobs",
+    "COURIER_POSTMARK_FROM_EMAIL": "tasky@tcwglobal.com"
   },
   "routes": [
     {

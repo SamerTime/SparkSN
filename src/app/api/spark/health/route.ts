@@ -12,7 +12,13 @@ const REQUIRED_ENV = [
   "SPARK_PUBLIC_JOBS_BASE_URL",
 ] as const;
 
-function envStatus(name: (typeof REQUIRED_ENV)[number]) {
+const MESSAGING_ENV = [
+  "COURIER_AUTH_TOKEN",
+  "COURIER_POSTMARK_FROM_EMAIL",
+  "COURIER_POSTMARK_MESSAGE_STREAM",
+] as const;
+
+function envStatus(name: string) {
   const value = process.env[name]?.trim() || "";
   const isUrl = name.endsWith("_URL") || name === "SPARK_PUBLIC_JOBS_BASE_URL";
 
@@ -34,7 +40,11 @@ export async function GET() {
   const env = Object.fromEntries(
     REQUIRED_ENV.map((name) => [name, envStatus(name)])
   );
+  const messagingEnv = Object.fromEntries(
+    MESSAGING_ENV.map((name) => [name, envStatus(name)])
+  );
   const missing = REQUIRED_ENV.filter((name) => !env[name].present);
+  const courierPostmarkReady = messagingEnv.COURIER_AUTH_TOKEN.present;
 
   let supabase:
     | { ok: true; publishedJobCount: number }
@@ -61,6 +71,13 @@ export async function GET() {
       runtime: "cloudflare-worker",
       env,
       missing,
+      messaging: {
+        courierPostmark: {
+          ready: courierPostmarkReady,
+          env: messagingEnv,
+          defaultFromEmail: "tasky@tcwglobal.com",
+        },
+      },
       supabase,
     },
     { status: ok ? 200 : 503 }

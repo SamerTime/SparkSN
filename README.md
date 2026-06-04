@@ -16,6 +16,8 @@ short mobile interview, recruiter review, and AI summary workflow.
 - `/spark/recruiter` shows the internal recruiter review queue.
 - `PATCH /api/spark/applications/[applicationId]` records recruiter notes,
   approval, interview invite, and decline actions.
+- Interview invites send candidate instructions through Courier, using Postmark
+  as the downstream email provider and `tasky@tcwglobal.com` as the sender.
 - Cloudflare Tunnel config is available for `spark.tcwglobal.com`.
 - Cloudflare Worker/OpenNext config is available for `spark.tcwglobal.com`.
 - Supabase project setup is documented for Spark backend data and storage.
@@ -73,6 +75,9 @@ SUPABASE_SERVICE_ROLE_KEY=""
 SUPABASE_DATABASE_URL=""
 SPARK_API_KEY="replace-with-a-shared-publish-secret"
 SPARK_PUBLIC_JOBS_BASE_URL="https://tcwtable.com/jobs"
+COURIER_AUTH_TOKEN=""
+COURIER_POSTMARK_FROM_EMAIL="tasky@tcwglobal.com"
+COURIER_POSTMARK_MESSAGE_STREAM=""
 OPENAI_API_KEY=""
 ```
 
@@ -128,4 +133,10 @@ Cloudflare must still have these runtime secrets:
 ```text
 SUPABASE_SERVICE_ROLE_KEY
 SPARK_API_KEY
+COURIER_AUTH_TOKEN
 ```
+
+`COURIER_POSTMARK_FROM_EMAIL` is checked into `wrangler.jsonc` as the
+non-secret sender address (`tasky@tcwglobal.com`). Set
+`COURIER_POSTMARK_MESSAGE_STREAM` in Cloudflare too if the Courier/Postmark
+workspace uses a specific Postmark stream.
