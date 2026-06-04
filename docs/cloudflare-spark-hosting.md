@@ -6,13 +6,77 @@ Target hostname:
 https://spark.tcwglobal.com
 ```
 
-For the first hosted version, use Cloudflare as the public front door and keep
-Spark running as a normal Next.js app behind it. This fits the current stack:
-Next.js, Supabase, and Spark API routes.
+For the hosted version, deploy Spark as a Cloudflare Worker using the
+OpenNext Cloudflare adapter. Supabase remains the backend database and storage
+layer.
 
-## Cloudflare Dashboard Setup
+## Cloudflare Worker Setup
 
-In Cloudflare Zero Trust:
+Create a new Cloudflare Workers project from GitHub and connect:
+
+```text
+Repository: SamerTime/SparkSN
+Branch: main
+Root directory: /
+Build command: pnpm run build:worker
+Deploy command: npx wrangler deploy
+```
+
+The repo contains:
+
+```text
+wrangler.jsonc
+open-next.config.ts
+```
+
+`wrangler.jsonc` sets `nodejs_compat`, points Wrangler at
+`.open-next/worker.js`, and keeps dashboard-managed environment variables during
+deploys.
+
+## Cloudflare Variables And Secrets
+
+Add these to the Worker in Cloudflare. Set them for both build-time and runtime
+when the dashboard offers both.
+
+```text
+SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+SUPABASE_SERVICE_ROLE_KEY
+SPARK_API_KEY
+SPARK_PUBLIC_JOBS_BASE_URL
+```
+
+Use:
+
+```text
+SPARK_PUBLIC_JOBS_BASE_URL=https://spark.tcwglobal.com/jobs
+```
+
+`SUPABASE_SERVICE_ROLE_KEY` and `SPARK_API_KEY` should be secrets, not plain
+text variables.
+
+## Local Worker Build
+
+Run a normal Next build:
+
+```powershell
+tools\pnpm.exe build
+```
+
+Run the Cloudflare Worker build:
+
+```powershell
+tools\pnpm.exe build:worker
+```
+
+OpenNext can warn that Windows is not its preferred local environment. The
+Cloudflare build runs on Linux, which avoids local Windows symlink issues.
+
+## Optional Local Tunnel
+
+If a temporary tunnel is needed before the Worker is live, use Cloudflare Zero
+Trust:
 
 1. Go to `Networks` -> `Tunnels`.
 2. Create a tunnel named `staffingnation-spark`.
@@ -28,89 +92,23 @@ Service type: HTTP
 Service URL: http://host.docker.internal:3000
 ```
 
-That service URL is for the current Windows Docker Desktop/local dev setup,
-where Spark is running on the host at `localhost:3000`.
-
-When Spark runs as a Docker Compose app service in the same Docker network, use:
-
-```text
-Service URL: http://app:3000
-```
-
-## Local Tunnel Run
-
-Add the copied token to `.env`:
-
-```env
-CLOUDFLARE_TUNNEL_TOKEN="paste-cloudflare-token-here"
-SPARK_PUBLIC_JOBS_BASE_URL="https://spark.tcwglobal.com/jobs"
-```
-
-Start Spark locally if it is not already running:
-
-```powershell
-tools\pnpm.exe dev
-```
-
-Start only the Cloudflare connector:
+Then add the copied token to `.env` and run:
 
 ```powershell
 docker compose -f docker-compose.cloudflare.yaml up -d
-```
-
-Check logs:
-
-```powershell
 docker compose -f docker-compose.cloudflare.yaml logs -f cloudflared
 ```
-
-Then open:
-
-```text
-https://spark.tcwglobal.com/jobs
-```
-
-## If You Created A Cloudflare Worker Build
-
-The current Spark app is a normal Next.js server app with Supabase server
-queries and API routes. A Cloudflare Worker project connected to GitHub
-with these settings is not enough:
-
-```text
-Build command: pnpm run build
-Deploy command: npx wrangler deploy
-Environment variables: none
-Branch: main
-```
-
-Problems with that setup:
-
-- Cloudflare is building `main`, while the current Spark work is on
-  `spark-module-setup`.
-- The runtime needs environment variables, at minimum `SUPABASE_URL`,
-  `SUPABASE_SERVICE_ROLE_KEY`, `SPARK_API_KEY`, and
-  `SPARK_PUBLIC_JOBS_BASE_URL`.
-- A Next.js app on Cloudflare Workers needs the OpenNext Cloudflare adapter, not
-  plain `npx wrangler deploy`.
-- Running the app fully inside Workers is a later architecture change.
-
-For now, use the Tunnel setup above. If Spark later moves fully to Workers, add
-OpenNext, Wrangler config, Cloudflare-compatible database access, and Worker
-secrets as a separate build slice.
 
 ## Production Notes
 
 - `SPARK_PUBLIC_JOBS_BASE_URL` must be `https://spark.tcwglobal.com/jobs`.
 - `SPARK_API_KEY` must match the StaffingNation publish secret.
 - Keep Supabase service keys in the host secret manager.
-- Cloudflare should terminate HTTPS and proxy only to Spark.
-- The Spark pages that read database data are marked dynamic so Docker builds do
-  not need live database reads during image creation.
+- The Spark pages that read database data are marked dynamic.
+- The Worker must use `nodejs_compat` for the Next.js/OpenNext runtime.
 
 ## Later Hardening
 
 - Restrict `/spark/recruiter` to authenticated recruiter users.
 - Add Cloudflare Access in front of recruiter-only routes.
 - Add WAF/rate limiting for public apply endpoints.
-- Move secrets into the production host secret manager.
-- Add a permanent production Node host behind the same Cloudflare hostname.

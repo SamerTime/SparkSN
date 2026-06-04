@@ -17,6 +17,7 @@ short mobile interview, recruiter review, and AI summary workflow.
 - `PATCH /api/spark/applications/[applicationId]` records recruiter notes,
   approval, interview invite, and decline actions.
 - Cloudflare Tunnel config is available for `spark.tcwglobal.com`.
+- Cloudflare Worker/OpenNext config is available for `spark.tcwglobal.com`.
 - Supabase project setup is documented for Spark backend data and storage.
 - GitHub Actions can deploy checked-in SQL migrations to Supabase.
 - Spark uses the Supabase server client for postings, profiles, and applications.
@@ -92,6 +93,8 @@ OPENAI_API_KEY=""
 - `docs/supabase-spark-setup.md` - Supabase backend setup for Spark
 - `.github/workflows/supabase-sql-migrate.yml` - GitHub to Supabase
   migration deploy workflow
+- `wrangler.jsonc` and `open-next.config.ts` - Cloudflare Worker deployment
+  config
 - `staffing-studio-hub/supabase/functions/spark-jd-publish/index.ts` -
   Staffing Studio publish function
 
@@ -107,3 +110,10 @@ Planned integrations include Courier for communications, Cloudflare for public
 delivery and security controls, Supabase for Staffing Studio functions, and
 mobile-ready camera/microphone capture for Spark interviews. Recruiter access
 can be hardened with Cloudflare Access or Supabase Auth in the next slice.
+
+Cloudflare Workers build settings:
+
+```text
+Build command: pnpm run build:worker
+Deploy command: npx wrangler deploy
+```
