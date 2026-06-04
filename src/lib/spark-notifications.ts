@@ -9,7 +9,7 @@ type SparkInterviewInviteInput = {
   candidateName?: string | null;
   jobTitle: string;
   clientName?: string | null;
-  jobUrl: string;
+  interviewUrl: string;
 };
 
 export type SparkNotificationSendResult =
@@ -77,7 +77,7 @@ function buildInterviewInviteContent(input: SparkInterviewInviteInput) {
     "- Keep your answers focused on the job, your experience, and your availability.",
     "- Spark may use location and device signals with your consent to reduce fraud and protect candidate identity.",
     "",
-    `Review the job details here: ${input.jobUrl}`,
+    `Start your interview here: ${input.interviewUrl}`,
     "",
     "A recruiter will follow up with the next instructions.",
     "",
@@ -101,8 +101,8 @@ function buildInterviewInviteContent(input: SparkInterviewInviteInput) {
         <li>Spark may use location and device signals with your consent to reduce fraud and protect candidate identity.</li>
       </ul>
       <p>
-        <a href="${escapeHtml(input.jobUrl)}" style="color:#2563eb;font-weight:700">
-          Review the job details
+        <a href="${escapeHtml(input.interviewUrl)}" style="color:#2563eb;font-weight:700">
+          Start interview
         </a>
       </p>
       <p>A recruiter will follow up with the next instructions.</p>
@@ -146,7 +146,7 @@ export async function sendSparkInterviewInvite(
           data: {
             applicationId: input.applicationId,
             jobTitle: input.jobTitle,
-            jobUrl: input.jobUrl,
+            interviewUrl: input.interviewUrl,
           },
           channels: {
             email: {

@@ -95,13 +95,25 @@ function appendEvent(
   };
 }
 
-function publicJobUrl(
-  request: NextRequest,
-  slug: string,
-  publicUrl?: string | null
+function interviewToken() {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function publicInterviewUrl(request: NextRequest, token: string) {
+  return `${new URL(request.url).origin}/interview/${token}`;
+}
+
+function withInterviewSession(
+  current: unknown,
+  session: Record<string, unknown>
 ) {
-  if (publicUrl) return publicUrl;
-  return `${new URL(request.url).origin}/jobs/${slug}`;
+  const media = jsonObject(current);
+  return {
+    ...media,
+    session,
+  };
 }
 
 function inviteEventDelivery(delivery: SparkNotificationSendResult | null) {
@@ -169,17 +181,24 @@ export async function PATCH(
         );
       }
 
+      const token = interviewToken();
+      const interviewUrl = publicInterviewUrl(request, token);
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      const session = {
+        token,
+        status: "invited",
+        inviteUrl: interviewUrl,
+        invitedAt: now,
+        expiresAt,
+      };
+
       delivery = await sendSparkInterviewInvite({
         applicationId,
         recipientEmail: application.candidateEmail,
         candidateName: application.candidateName,
         jobTitle: application.posting.title,
         clientName: application.posting.clientName,
-        jobUrl: publicJobUrl(
-          request,
-          application.posting.slug,
-          application.posting.publicUrl
-        ),
+        interviewUrl,
       });
 
       if (!delivery.ok) {
@@ -219,6 +238,11 @@ export async function PATCH(
           { status: 502 }
         );
       }
+
+      application.interviewMedia = withInterviewSession(
+        application.interviewMedia,
+        session
+      ) as JsonValue;
     }
 
     const communicationState = appendEvent(application.communicationState, {
@@ -236,6 +260,9 @@ export async function PATCH(
         ...(config.status ? { status: config.status } : {}),
         recruiterNotes,
         communicationState: communicationState as JsonValue,
+        ...(action === "invite_interview"
+          ? { interviewMedia: application.interviewMedia }
+          : {}),
       },
       "id,status,recruiterNotes"
     );

@@ -107,6 +107,7 @@ export type SparkRecruiterActionApplication = Pick<
   SparkApplication,
   | "id"
   | "communicationState"
+  | "interviewMedia"
   | "status"
   | "postingId"
   | "candidateEmail"
@@ -116,6 +117,14 @@ export type SparkRecruiterActionApplication = Pick<
   posting: Pick<
     SparkJobPosting,
     "id" | "title" | "slug" | "clientName" | "publicUrl"
+  > | null;
+};
+
+export type SparkInterviewSessionApplication = SparkApplication & {
+  posting: Pick<SparkJobPosting, "id" | "title" | "slug" | "clientName"> | null;
+  candidate: Pick<
+    SparkCandidateProfile,
+    "firstName" | "lastName" | "email" | "phone" | "city" | "state"
   > | null;
 };
 
@@ -520,7 +529,7 @@ export async function getApplicationForRecruiterAction(
   const { data, error } = await supabase
     .from("SparkApplication")
     .select(
-      "id,communicationState,status,postingId,candidateEmail,candidateName,candidatePhone"
+      "id,communicationState,interviewMedia,status,postingId,candidateEmail,candidateName,candidatePhone"
     )
     .eq("id", applicationId)
     .maybeSingle();
@@ -608,6 +617,51 @@ export async function listRecruiterApplications() {
       ? candidatesById.get(application.candidateId) || null
       : null,
   })) as unknown as SparkApplicationWithRelations[];
+}
+
+export async function getApplicationByInterviewToken(
+  token: string
+): Promise<SparkInterviewSessionApplication | null> {
+  const supabase = getSparkSupabase();
+  const appsResponse = await supabase
+    .from("SparkApplication")
+    .select("*")
+    .contains("interviewMedia", { session: { token } })
+    .maybeSingle();
+
+  if (appsResponse.error) {
+    fail(appsResponse.error, "Unable to load Spark interview session");
+  }
+
+  if (!appsResponse.data) return null;
+
+  const postingResponse = await supabase
+    .from("SparkJobPosting")
+    .select("id,title,slug,clientName")
+    .eq("id", appsResponse.data.postingId)
+    .maybeSingle();
+
+  if (postingResponse.error) {
+    fail(postingResponse.error, "Unable to load Spark interview posting");
+  }
+
+  const candidateResponse = appsResponse.data.candidateId
+    ? await supabase
+        .from("SparkCandidateProfile")
+        .select("id,firstName,lastName,email,phone,city,state")
+        .eq("id", appsResponse.data.candidateId)
+        .maybeSingle()
+    : { data: null, error: null };
+
+  if (candidateResponse.error) {
+    fail(candidateResponse.error, "Unable to load Spark interview candidate");
+  }
+
+  return {
+    ...appsResponse.data,
+    posting: postingResponse.data || null,
+    candidate: candidateResponse.data || null,
+  } as unknown as SparkInterviewSessionApplication;
 }
 
 export async function listApplicationStatuses(): Promise<

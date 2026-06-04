@@ -70,6 +70,12 @@ function statusClass(status: string) {
   if (status === "InterviewInvited") {
     return "border-[var(--sn-coral-100)] bg-[var(--sn-coral-50)] text-[var(--sn-coral-600)]";
   }
+  if (status === "InterviewStarted") {
+    return "border-[var(--sn-blue-200)] bg-[var(--sn-blue-50)] text-[var(--sn-blue-700)]";
+  }
+  if (status === "InterviewCompleted") {
+    return "border-[var(--sn-success)] bg-[var(--sn-success-50)] text-[var(--sn-success)]";
+  }
   if (status === "Declined") {
     return "border-[var(--sn-danger)] bg-[var(--sn-danger-50)] text-[var(--sn-danger)]";
   }
@@ -125,7 +131,8 @@ export default async function SparkRecruiterPage() {
     statusRows.filter((item) => item.status === "Applied").length;
   const interviewInvites =
     statusRows.filter((item) => item.status === "InterviewInvited").length;
-  const vetted = statusRows.filter((item) => item.status === "Vetted").length;
+  const completedInterviews =
+    statusRows.filter((item) => item.status === "InterviewCompleted").length;
 
   return (
     <main className="sn-page">
@@ -185,10 +192,10 @@ export default async function SparkRecruiterPage() {
             <div className="sn-card p-4">
               <div className="flex items-center gap-2 text-sm text-[var(--sn-muted)]">
                 <CheckCircle2 className="h-4 w-4 text-[var(--sn-success)]" />
-                Vetted
+                Completed
               </div>
               <p className="mt-2 text-2xl font-extrabold text-[var(--sn-ink)]">
-                {vetted}
+                {completedInterviews}
               </p>
             </div>
             <div className="sn-card p-4">
