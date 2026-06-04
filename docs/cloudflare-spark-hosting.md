@@ -23,6 +23,9 @@ Deploy command: pnpm run deploy:worker
 Version command: pnpm run upload:worker
 ```
 
+The deploy and upload scripts pass `--keep-vars` so dashboard-managed secrets,
+including `SUPABASE_SERVICE_ROLE_KEY`, survive each deployment.
+
 The repo contains:
 
 ```text
@@ -32,7 +35,8 @@ open-next.config.ts
 
 `wrangler.jsonc` sets `nodejs_compat`, points Wrangler at
 `.open-next/worker.js`, and keeps dashboard-managed environment variables during
-deploys.
+deploys. It also registers `spark.tcwglobal.com` as the production custom
+domain and disables the extra `workers.dev` preview URLs.
 
 ## Cloudflare Variables And Secrets
 

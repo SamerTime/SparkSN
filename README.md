@@ -118,3 +118,6 @@ Build command: pnpm run build:worker
 Deploy command: pnpm run deploy:worker
 Version command: pnpm run upload:worker
 ```
+
+The deploy scripts pass `--keep-vars` so Cloudflare dashboard secrets are not
+removed during Worker deploys.

@@ -4,7 +4,15 @@
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-06-04",
   "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
   "keep_vars": true,
+  "routes": [
+    {
+      "pattern": "spark.tcwglobal.com",
+      "custom_domain": true
+    }
+  ],
   "observability": {
     "enabled": true
   },
