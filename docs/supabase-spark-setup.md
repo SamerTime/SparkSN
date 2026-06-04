@@ -85,6 +85,32 @@ tools\pnpm.exe prisma generate
 5. Submit a test Spark application.
 6. Confirm `/spark/recruiter` reads from Supabase data.
 
+## GitHub To Supabase Migrations
+
+The repo includes a GitHub Actions workflow at
+`.github/workflows/supabase-prisma-migrate.yml`. It installs dependencies,
+generates Prisma, and runs:
+
+```bash
+pnpm prisma migrate deploy
+```
+
+Add this repository secret in GitHub:
+
+```text
+SUPABASE_DATABASE_URL
+```
+
+Use the Supabase shared pooler URI for the secret value:
+
+```text
+postgresql://postgres.xmidhrqlfsnkhoadpgsh:<DB_PASSWORD>@aws-1-us-west-2.pooler.supabase.com:6543/postgres?sslmode=require&pgbouncer=true&connection_limit=1
+```
+
+Replace `<DB_PASSWORD>` with the actual database password, with no brackets.
+Keep the secret out of commits. The workflow runs manually and on pushes to
+`main` or `spark-module-setup` when Prisma or workflow files change.
+
 ## Cloudflare Pairing
 
 Cloudflare should point `spark.tcwglobal.com` at the hosted Spark app. Supabase
