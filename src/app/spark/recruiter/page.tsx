@@ -12,7 +12,11 @@ import {
   UserRoundCheck,
   Video,
 } from "lucide-react";
-import prisma from "@/lib/prisma";
+import {
+  countPublishedJobs,
+  listApplicationStatuses,
+  listRecruiterApplications,
+} from "@/lib/spark-db";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SparkInitials } from "@/components/spark/SparkBrand";
@@ -79,13 +83,13 @@ function formatStatus(status: string) {
   return status.replace(/([a-z])([A-Z])/g, "$1 $2");
 }
 
-function formatDate(value: Date) {
+function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
-  }).format(value);
+  }).format(new Date(value));
 }
 
 function summaryPreview(value: unknown) {
@@ -101,50 +105,18 @@ function summaryPreview(value: unknown) {
 }
 
 export default async function SparkRecruiterPage() {
-  const [applications, groupedStatuses, postingCount] = await Promise.all([
-    prisma.sparkApplication.findMany({
-      orderBy: { updatedAt: "desc" },
-      take: 50,
-      include: {
-        posting: {
-          select: {
-            title: true,
-            slug: true,
-            clientName: true,
-          },
-        },
-        candidate: {
-          select: {
-            firstName: true,
-            lastName: true,
-            email: true,
-            phone: true,
-            city: true,
-            state: true,
-          },
-        },
-      },
-    }),
-    prisma.sparkApplication.groupBy({
-      by: ["status"],
-      _count: { _all: true },
-    }),
-    prisma.sparkJobPosting.count({
-      where: { status: "Published" },
-    }),
+  const [applications, statusRows, postingCount] = await Promise.all([
+    listRecruiterApplications(),
+    listApplicationStatuses(),
+    countPublishedJobs(),
   ]);
 
-  const totalApplications = groupedStatuses.reduce(
-    (sum, status) => sum + status._count._all,
-    0
-  );
+  const totalApplications = statusRows.length;
   const waitingReview =
-    groupedStatuses.find((item) => item.status === "Applied")?._count._all || 0;
+    statusRows.filter((item) => item.status === "Applied").length;
   const interviewInvites =
-    groupedStatuses.find((item) => item.status === "InterviewInvited")?._count
-      ._all || 0;
-  const vetted =
-    groupedStatuses.find((item) => item.status === "Vetted")?._count._all || 0;
+    statusRows.filter((item) => item.status === "InterviewInvited").length;
+  const vetted = statusRows.filter((item) => item.status === "Vetted").length;
 
   return (
     <main className="sn-page">

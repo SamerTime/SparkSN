@@ -10,7 +10,7 @@ import {
   Sparkles,
   UsersRound,
 } from "lucide-react";
-import prisma from "@/lib/prisma";
+import { listPublishedJobs } from "@/lib/spark-db";
 import { Button } from "@/components/ui/button";
 import { SparkInitials } from "@/components/spark/SparkBrand";
 
@@ -46,31 +46,15 @@ function countryName(value: unknown) {
   return "";
 }
 
-function formatDate(value: Date) {
+function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
-  }).format(value);
+  }).format(new Date(value));
 }
 
 export default async function JobsPage() {
-  const jobs = await prisma.sparkJobPosting.findMany({
-    where: { status: "Published" },
-    orderBy: { lastSyncedAt: "desc" },
-    select: {
-      id: true,
-      title: true,
-      slug: true,
-      overview: true,
-      clientName: true,
-      skills: true,
-      payRangeMin: true,
-      payRangeMax: true,
-      currency: true,
-      country: true,
-      lastSyncedAt: true,
-    },
-  });
+  const jobs = await listPublishedJobs();
 
   return (
     <main className="sn-page">

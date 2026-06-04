@@ -6,7 +6,7 @@ Spark Supabase project:
 https://xmidhrqlfsnkhoadpgsh.supabase.co
 ```
 
-Supabase should own the backend data and storage layer for Spark:
+Supabase owns the backend data and storage layer for Spark:
 
 - Spark job postings
 - Candidate profiles
@@ -26,7 +26,7 @@ NEXT_PUBLIC_SUPABASE_URL="https://xmidhrqlfsnkhoadpgsh.supabase.co"
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY="..."
 SUPABASE_ANON_KEY="..."
 SUPABASE_SERVICE_ROLE_KEY="..."
-DATABASE_URL="..."
+SUPABASE_DATABASE_URL="..."
 ```
 
 Use the Supabase dashboard:
@@ -47,8 +47,8 @@ Use:
 Project Settings -> Database -> Connection string
 ```
 
-Copy a Postgres connection string for Prisma. Keep the password included in the
-secret value, but never commit it.
+Copy the shared pooler URI for `SUPABASE_DATABASE_URL`. This is used only by
+SQL migration scripts and GitHub Actions. Keep it out of commits.
 
 ## Storage Buckets
 
@@ -66,33 +66,40 @@ Recommended first-pass privacy:
 - Candidate uploads go through signed upload URLs or server routes.
 - Recruiter downloads go through signed read URLs after permission checks.
 
-## Migration Plan
+## SQL Migration Plan
 
-1. Add Supabase keys and `DATABASE_URL` to `.env`.
-2. Run Prisma migrations against Supabase:
+1. Add Supabase keys to `.env`.
+2. Apply checked-in SQL migrations from `supabase/migrations`.
+3. Publish a test job from StaffingNation or call the Spark receiver.
+4. Submit a test Spark application.
+5. Confirm `/spark/recruiter` reads from Supabase data.
+
+Local PowerShell migration command:
 
 ```powershell
-tools\pnpm.exe prisma migrate deploy
+psql "$env:SUPABASE_DATABASE_URL" --set ON_ERROR_STOP=1 --file "supabase/migrations/20260604000000_spark_schema.sql"
 ```
 
-3. Generate Prisma client:
+Docker migration command if `psql` is not installed:
 
 ```powershell
-tools\pnpm.exe prisma generate
+docker compose -f docker-compose.migrate.yaml run --rm supabase-migrate
 ```
 
-4. Publish a test job from StaffingNation or call the Spark receiver.
-5. Submit a test Spark application.
-6. Confirm `/spark/recruiter` reads from Supabase data.
+If `psql` is not installed locally, run the SQL directly in Supabase:
+
+```text
+Supabase Dashboard -> SQL Editor -> New query
+```
+
+Paste the contents of the migration file and run it.
 
 ## GitHub To Supabase Migrations
 
-The repo includes a GitHub Actions workflow at
-`.github/workflows/supabase-prisma-migrate.yml`. It installs dependencies,
-generates Prisma, and runs:
+The repo includes:
 
-```bash
-pnpm prisma migrate deploy
+```text
+.github/workflows/supabase-sql-migrate.yml
 ```
 
 Add this repository secret in GitHub:
@@ -104,12 +111,12 @@ SUPABASE_DATABASE_URL
 Use the Supabase shared pooler URI for the secret value:
 
 ```text
-postgresql://postgres.xmidhrqlfsnkhoadpgsh:<DB_PASSWORD>@aws-1-us-west-2.pooler.supabase.com:6543/postgres?sslmode=require&pgbouncer=true&connection_limit=1
+postgresql://postgres.xmidhrqlfsnkhoadpgsh:<DB_PASSWORD>@aws-1-us-west-2.pooler.supabase.com:6543/postgres?sslmode=require
 ```
 
 Replace `<DB_PASSWORD>` with the actual database password, with no brackets.
-Keep the secret out of commits. The workflow runs manually and on pushes to
-`main` or `spark-module-setup` when Prisma or workflow files change.
+The workflow runs manually and on pushes to `main` when SQL migration files
+change.
 
 ## Cloudflare Pairing
 
@@ -119,6 +126,5 @@ does not replace the Spark web host; it provides the backend services Spark uses
 Production env values should include:
 
 ```env
-NEXTAUTH_URL="https://spark.tcwglobal.com"
 SPARK_PUBLIC_JOBS_BASE_URL="https://spark.tcwglobal.com/jobs"
 ```

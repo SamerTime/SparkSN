@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
-import prisma from "@/lib/prisma";
+import {
+  createApplication,
+  findApplicationByPostingAndEmail,
+  getPublishedPostingForApplication,
+  type JsonValue,
+  updateApplication,
+  upsertCandidateProfileByEmail,
+} from "@/lib/spark-db";
 
 function stringValue(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -61,7 +67,7 @@ export async function POST(request: NextRequest) {
     const aiInterviewConsent = booleanValue(body.aiInterviewConsent);
     const recordingConsent = booleanValue(body.recordingConsent);
     const geolocationConsent = booleanValue(body.geolocationConsent);
-    const now = new Date();
+    const now = new Date().toISOString();
 
     if (!postingSlug) {
       return NextResponse.json(
@@ -95,15 +101,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const posting = await prisma.sparkJobPosting.findFirst({
-      where: { slug: postingSlug, status: "Published" },
-      select: {
-        id: true,
-        title: true,
-        slug: true,
-        clientName: true,
-      },
-    });
+    const posting = await getPublishedPostingForApplication(postingSlug);
 
     if (!posting) {
       return NextResponse.json(
@@ -133,11 +131,11 @@ export async function POST(request: NextRequest) {
             latitude,
             longitude,
             accuracy,
-            capturedAt: now.toISOString(),
+            capturedAt: now,
           }
         : null;
 
-    const profileData: Prisma.InputJsonObject = {
+    const profileData: JsonValue = {
       source: "spark_public_apply",
       experienceSummary,
       availableToStart,
@@ -146,67 +144,37 @@ export async function POST(request: NextRequest) {
       lastAppliedPostingTitle: posting.title,
     };
 
-    const candidate = await prisma.sparkCandidateProfile.upsert({
-      where: { email },
-      update: {
-        firstName,
-        lastName,
-        phone,
-        city,
-        state,
-        country,
-        profileData,
-        geolocationConsentAt: now,
-        aiInterviewConsentAt: now,
-        recordingConsentAt: now,
-        fraudReviewData: {
-          locationCaptured: Boolean(browserLocation),
-          lastLocationCaptureAt: browserLocation ? now.toISOString() : null,
-        },
-      },
-      create: {
-        email,
-        firstName,
-        lastName,
-        phone,
-        city,
-        state,
-        country,
-        profileData,
-        geolocationConsentAt: now,
-        aiInterviewConsentAt: now,
-        recordingConsentAt: now,
-        fraudReviewData: {
-          locationCaptured: Boolean(browserLocation),
-          firstLocationCaptureAt: browserLocation ? now.toISOString() : null,
-        },
-      },
-      select: {
-        id: true,
-        email: true,
+    const candidate = await upsertCandidateProfileByEmail(email, {
+      firstName,
+      lastName,
+      phone,
+      city,
+      state,
+      country,
+      profileData,
+      geolocationConsentAt: now,
+      aiInterviewConsentAt: now,
+      recordingConsentAt: now,
+      fraudReviewData: {
+        locationCaptured: Boolean(browserLocation),
+        locationCaptureAt: browserLocation ? now : null,
       },
     });
 
-    const existingApplication = await prisma.sparkApplication.findFirst({
-      where: {
-        postingId: posting.id,
-        candidateEmail: email,
-      },
-      select: {
-        id: true,
-        communicationState: true,
-      },
-    });
+    const existingApplication = await findApplicationByPostingAndEmail(
+      posting.id,
+      email
+    );
 
     const candidateName = `${firstName} ${lastName}`;
-    const locationSignals: Prisma.InputJsonObject = {
+    const locationSignals: JsonValue = {
       candidateProvidedLocation: {
         city,
         state,
         country,
       },
       browserGeolocation: browserLocation,
-      consentAt: now.toISOString(),
+      consentAt: now,
       fraudReview: {
         needsLocationReview: !browserLocation,
         reason: browserLocation
@@ -214,11 +182,11 @@ export async function POST(request: NextRequest) {
           : "Candidate consented, but browser location was not captured.",
       },
     };
-    const deviceSignals: Prisma.InputJsonObject = {
+    const deviceSignals: JsonValue = {
       userAgent: request.headers.get("user-agent"),
       acceptLanguage: request.headers.get("accept-language"),
       browser: browserSignals,
-      submittedAt: now.toISOString(),
+      submittedAt: now,
     };
     const communicationState = appendCommunicationEvents(
       existingApplication?.communicationState,
@@ -228,7 +196,7 @@ export async function POST(request: NextRequest) {
           label: existingApplication
             ? "Candidate profile updated"
             : "Application received",
-          at: now.toISOString(),
+          at: now,
           channel: preferredChannel,
           messagePreview:
             "Thanks for applying. A recruiter will review your profile before the short interview step.",
@@ -236,7 +204,7 @@ export async function POST(request: NextRequest) {
         {
           type: "recruiter_review_queued",
           label: "Recruiter review queued",
-          at: now.toISOString(),
+          at: now,
           channel: "internal",
           messagePreview:
             "Review profile, confirm fit, then approve or invite to interview.",
@@ -246,39 +214,26 @@ export async function POST(request: NextRequest) {
     );
 
     const application = existingApplication
-      ? await prisma.sparkApplication.update({
-          where: { id: existingApplication.id },
-          data: {
-            candidateId: candidate.id,
-            candidateEmail: email,
-            candidateName,
-            candidatePhone: phone,
-            status: "Applied",
-            communicationState: communicationState as Prisma.InputJsonObject,
-            deviceSignals,
-            locationSignals,
-          },
-          select: {
-            id: true,
-            status: true,
-          },
+      ? await updateApplication(existingApplication.id, {
+          candidateId: candidate.id,
+          candidateEmail: email,
+          candidateName,
+          candidatePhone: phone,
+          status: "Applied",
+          communicationState: communicationState as JsonValue,
+          deviceSignals,
+          locationSignals,
         })
-      : await prisma.sparkApplication.create({
-          data: {
-            postingId: posting.id,
-            candidateId: candidate.id,
-            candidateEmail: email,
-            candidateName,
-            candidatePhone: phone,
-            status: "Applied",
-            communicationState: communicationState as Prisma.InputJsonObject,
-            deviceSignals,
-            locationSignals,
-          },
-          select: {
-            id: true,
-            status: true,
-          },
+      : await createApplication({
+          postingId: posting.id,
+          candidateId: candidate.id,
+          candidateEmail: email,
+          candidateName,
+          candidatePhone: phone,
+          status: "Applied",
+          communicationState: communicationState as JsonValue,
+          deviceSignals,
+          locationSignals,
         });
 
     return NextResponse.json({

@@ -18,8 +18,8 @@ short mobile interview, recruiter review, and AI summary workflow.
   approval, interview invite, and decline actions.
 - Cloudflare Tunnel config is available for `spark.tcwglobal.com`.
 - Supabase project setup is documented for Spark backend data and storage.
-- GitHub Actions can deploy checked-in Prisma migrations to Supabase.
-- Prisma is trimmed to Spark postings, candidate profiles, and applications.
+- GitHub Actions can deploy checked-in SQL migrations to Supabase.
+- Spark uses the Supabase server client for postings, profiles, and applications.
 - `staffing-studio-hub` contains the matching Staffing Studio publish function
   and job description UI action.
 
@@ -46,22 +46,10 @@ Prerequisites:
 - Node.js 20+
 - pnpm, or the repo-local `tools/pnpm.exe`
 
-Start the local services:
-
-```powershell
-docker compose up -d db
-```
-
 Install dependencies:
 
 ```powershell
 tools\pnpm.exe install
-```
-
-Run database migrations:
-
-```powershell
-tools\pnpm.exe prisma migrate deploy
 ```
 
 Start the app:
@@ -77,14 +65,15 @@ Open the app at [http://localhost:3000/jobs](http://localhost:3000/jobs).
 Copy `.env.example` to `.env` and set the local values:
 
 ```env
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/staffingnation_spark"
+SUPABASE_URL="https://xmidhrqlfsnkhoadpgsh.supabase.co"
+NEXT_PUBLIC_SUPABASE_URL="https://xmidhrqlfsnkhoadpgsh.supabase.co"
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=""
+SUPABASE_SERVICE_ROLE_KEY=""
+SUPABASE_DATABASE_URL=""
 SPARK_API_KEY="replace-with-a-shared-publish-secret"
 SPARK_PUBLIC_JOBS_BASE_URL="https://tcwtable.com/jobs"
 OPENAI_API_KEY=""
 ```
-
-If you already have a local database from the earlier prototype, keep your
-existing `.env` value until you intentionally migrate or recreate the database.
 
 ## Key Paths
 
@@ -95,12 +84,13 @@ existing `.env` value until you intentionally migrate or recreate the database.
 - `src/app/api/spark/job-postings/route.ts` - StaffingNation publish receiver
 - `src/app/api/spark/applications/route.ts` - Spark candidate application
   receiver
-- `prisma/schema.prisma` - Spark posting/application/profile models
+- `supabase/migrations/` - Spark SQL schema migrations
+- `docker-compose.migrate.yaml` - local Docker runner for Supabase SQL migrations
 - `docs/spark-local-setup.md` - local setup details
 - `docs/cloudflare-spark-hosting.md` - Cloudflare Tunnel setup for
   `spark.tcwglobal.com`
 - `docs/supabase-spark-setup.md` - Supabase backend setup for Spark
-- `.github/workflows/supabase-prisma-migrate.yml` - GitHub to Supabase
+- `.github/workflows/supabase-sql-migrate.yml` - GitHub to Supabase
   migration deploy workflow
 - `staffing-studio-hub/supabase/functions/spark-jd-publish/index.ts` -
   Staffing Studio publish function
@@ -110,7 +100,6 @@ existing `.env` value until you intentionally migrate or recreate the database.
 - Next.js 15
 - React 19
 - TypeScript
-- Prisma
 - PostgreSQL
 - Tailwind CSS
 

@@ -2,8 +2,7 @@
 
 ## Where This Is Built
 
-Spark is built in this repo (`SN-Spark`) as the public/candidate/recruiter
-module.
+Spark is built in this repo as the public/candidate/recruiter module.
 
 StaffingNation / Staffing Studio lives in the sibling checkout:
 
@@ -52,13 +51,19 @@ https://tcwtable.com/jobs
 Create `.env` from `.env.example` and set:
 
 ```env
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/staffingnation_spark"
+SUPABASE_URL="https://xmidhrqlfsnkhoadpgsh.supabase.co"
+NEXT_PUBLIC_SUPABASE_URL="https://xmidhrqlfsnkhoadpgsh.supabase.co"
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY="..."
+SUPABASE_ANON_KEY="..."
+SUPABASE_SERVICE_ROLE_KEY="..."
 
 SPARK_API_KEY="replace-with-shared-secret"
 SPARK_PUBLIC_JOBS_BASE_URL="https://tcwtable.com/jobs"
 
 OPENAI_API_KEY=
 ```
+
+`SUPABASE_DATABASE_URL` is only needed when applying SQL migrations.
 
 ## StaffingNation Environment
 
@@ -79,32 +84,30 @@ Install dependencies:
 pnpm install
 ```
 
-Start the database if using Docker:
-
-```bash
-docker compose up -d db
-```
-
-Apply migrations and generate Prisma client:
-
-```bash
-pnpm prisma migrate deploy
-pnpm prisma generate
-```
-
-In this Codex Windows workspace, use the repo-local pnpm binary and put the
-bundled Node runtime first on PATH before Prisma commands:
+Apply the Supabase SQL schema if needed:
 
 ```powershell
-$env:PATH="C:\Users\samer\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin;$env:PATH"
-tools\pnpm.exe prisma migrate deploy
-tools\pnpm.exe prisma generate
+psql "$env:SUPABASE_DATABASE_URL" --set ON_ERROR_STOP=1 --file "supabase/migrations/20260604000000_spark_schema.sql"
+```
+
+If `psql` is not installed locally, use Docker:
+
+```powershell
+docker compose -f docker-compose.migrate.yaml run --rm supabase-migrate
 ```
 
 Run Spark:
 
 ```bash
 pnpm dev
+```
+
+In this Codex Windows workspace, use the repo-local pnpm binary and put the
+bundled Node runtime first on PATH before running app commands:
+
+```powershell
+$env:PATH="C:\Users\samer\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin;$env:PATH"
+tools\pnpm.exe dev
 ```
 
 ## First Integration Test

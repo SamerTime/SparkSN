@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
-import prisma from "@/lib/prisma";
+import { type JsonValue, upsertJobPostingBySourceEntityId } from "@/lib/spark-db";
 
 const EXPECTED_PAYLOAD_VERSION = "staffingnation.jd.v1";
 const DEFAULT_PUBLIC_JOBS_BASE_URL = "https://tcwtable.com/jobs";
@@ -131,75 +130,44 @@ export async function POST(req: NextRequest) {
       cleanText(process.env.SPARK_PUBLIC_JOBS_BASE_URL) ||
       DEFAULT_PUBLIC_JOBS_BASE_URL;
     const publicUrl = `${publicJobsBaseUrl.replace(/\/+$/g, "")}/${slug}`;
-    const now = new Date();
-    const physicalRequirements = (payload.job?.physical_requirements ?? {}) as Prisma.InputJsonValue;
+    const now = new Date().toISOString();
+    const physicalRequirements = (payload.job?.physical_requirements ?? {}) as JsonValue;
     const country =
       payload.compliance?.country === undefined || payload.compliance.country === null
-        ? Prisma.JsonNull
-        : (payload.compliance.country as Prisma.InputJsonValue);
-    const rawPayload = payload as Prisma.InputJsonValue;
+        ? null
+        : (payload.compliance.country as JsonValue);
+    const rawPayload = payload as JsonValue;
 
-    const posting = await prisma.sparkJobPosting.upsert({
-      where: { sourceEntityId },
-      create: {
-        sourceSystem: "staffingnation",
-        sourceEntityType: "job_description",
-        sourceEntityId,
-        sourceRevision: cleanText(payload.source_revision),
-        payloadVersion: EXPECTED_PAYLOAD_VERSION,
-        clientId: cleanText(payload.client?.id)!,
-        clientName: cleanText(payload.client?.name),
-        title,
-        slug,
-        overview: cleanText(payload.job?.overview),
-        responsibilities: cleanText(payload.job?.responsibilities),
-        requirements: cleanText(payload.job?.requirements),
-        qualifications: cleanText(payload.job?.qualifications),
-        skills: toStringArray(payload.job?.skills),
-        certifications: toStringArray(payload.job?.certifications),
-        physicalRequirements,
-        payRangeMin: toDecimalString(payload.compensation?.pay_range_min),
-        payRangeMax: toDecimalString(payload.compensation?.pay_range_max),
-        currency: cleanText(payload.compensation?.currency) || "USD",
-        country,
-        socCode: cleanText(payload.compliance?.soc_code),
-        socTitle: cleanText(payload.compliance?.soc_title),
-        wcCode: cleanText(payload.compliance?.wc_code),
-        wcDescription: cleanText(payload.compliance?.wc_description),
-        publicJobsBaseUrl,
-        publicUrl,
-        status: "Published",
-        rawPayload,
-        publishedAt: now,
-        lastSyncedAt: now,
-      },
-      update: {
-        sourceRevision: cleanText(payload.source_revision),
-        payloadVersion: EXPECTED_PAYLOAD_VERSION,
-        clientId: cleanText(payload.client?.id)!,
-        clientName: cleanText(payload.client?.name),
-        title,
-        overview: cleanText(payload.job?.overview),
-        responsibilities: cleanText(payload.job?.responsibilities),
-        requirements: cleanText(payload.job?.requirements),
-        qualifications: cleanText(payload.job?.qualifications),
-        skills: toStringArray(payload.job?.skills),
-        certifications: toStringArray(payload.job?.certifications),
-        physicalRequirements,
-        payRangeMin: toDecimalString(payload.compensation?.pay_range_min),
-        payRangeMax: toDecimalString(payload.compensation?.pay_range_max),
-        currency: cleanText(payload.compensation?.currency) || "USD",
-        country,
-        socCode: cleanText(payload.compliance?.soc_code),
-        socTitle: cleanText(payload.compliance?.soc_title),
-        wcCode: cleanText(payload.compliance?.wc_code),
-        wcDescription: cleanText(payload.compliance?.wc_description),
-        publicJobsBaseUrl,
-        publicUrl,
-        status: "Published",
-        rawPayload,
-        lastSyncedAt: now,
-      },
+    const posting = await upsertJobPostingBySourceEntityId(sourceEntityId, {
+      sourceSystem: "staffingnation",
+      sourceEntityType: "job_description",
+      sourceRevision: cleanText(payload.source_revision),
+      payloadVersion: EXPECTED_PAYLOAD_VERSION,
+      clientId: cleanText(payload.client?.id)!,
+      clientName: cleanText(payload.client?.name),
+      title,
+      slug,
+      overview: cleanText(payload.job?.overview),
+      responsibilities: cleanText(payload.job?.responsibilities),
+      requirements: cleanText(payload.job?.requirements),
+      qualifications: cleanText(payload.job?.qualifications),
+      skills: toStringArray(payload.job?.skills),
+      certifications: toStringArray(payload.job?.certifications),
+      physicalRequirements,
+      payRangeMin: toDecimalString(payload.compensation?.pay_range_min),
+      payRangeMax: toDecimalString(payload.compensation?.pay_range_max),
+      currency: cleanText(payload.compensation?.currency) || "USD",
+      country,
+      socCode: cleanText(payload.compliance?.soc_code),
+      socTitle: cleanText(payload.compliance?.soc_title),
+      wcCode: cleanText(payload.compliance?.wc_code),
+      wcDescription: cleanText(payload.compliance?.wc_description),
+      publicJobsBaseUrl,
+      publicUrl,
+      status: "Published",
+      rawPayload,
+      publishedAt: now,
+      lastSyncedAt: now,
     });
 
     return NextResponse.json({

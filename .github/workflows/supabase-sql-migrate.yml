@@ -1,0 +1,49 @@
+name: Supabase SQL Migrations
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/supabase-sql-migrate.yml"
+      - "supabase/migrations/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-sql-migrations
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Deploy Supabase SQL migrations
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+
+    steps:
+      - name: Check required secret
+        if: ${{ env.DATABASE_URL == '' }}
+        run: |
+          echo "Missing SUPABASE_DATABASE_URL repository secret."
+          exit 1
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Deploy SQL migrations to Supabase
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          for migration in supabase/migrations/*.sql; do
+            echo "Applying ${migration}"
+            psql "$DATABASE_URL" --set ON_ERROR_STOP=1 --file "$migration"
+          done

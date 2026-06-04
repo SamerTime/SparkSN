@@ -10,7 +10,7 @@ import {
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
-import prisma from "@/lib/prisma";
+import { getPublishedJobBySlug } from "@/lib/spark-db";
 import { Button } from "@/components/ui/button";
 import { SparkApplyForm } from "@/components/spark/SparkApplyForm";
 
@@ -52,22 +52,9 @@ export default async function SparkApplyPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const job = await prisma.sparkJobPosting.findUnique({
-    where: { slug },
-    select: {
-      title: true,
-      slug: true,
-      clientName: true,
-      overview: true,
-      payRangeMin: true,
-      payRangeMax: true,
-      currency: true,
-      country: true,
-      status: true,
-    },
-  });
+  const job = await getPublishedJobBySlug(slug);
 
-  if (!job || job.status !== "Published") {
+  if (!job) {
     notFound();
   }
 

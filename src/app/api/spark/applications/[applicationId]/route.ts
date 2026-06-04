@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
-import prisma from "@/lib/prisma";
+import {
+  getApplicationForRecruiterAction,
+  type JsonValue,
+  updateApplication,
+} from "@/lib/spark-db";
 
 type ActionConfig = {
   status?: "RecruiterApproved" | "InterviewInvited" | "Declined" | "RecruiterReview";
@@ -97,14 +100,7 @@ export async function PATCH(
       );
     }
 
-    const application = await prisma.sparkApplication.findUnique({
-      where: { id: applicationId },
-      select: {
-        id: true,
-        communicationState: true,
-        status: true,
-      },
-    });
+    const application = await getApplicationForRecruiterAction(applicationId);
 
     if (!application) {
       return NextResponse.json(
@@ -121,19 +117,15 @@ export async function PATCH(
       messagePreview: config.messagePreview,
     });
 
-    const updated = await prisma.sparkApplication.update({
-      where: { id: applicationId },
-      data: {
+    const updated = await updateApplication(
+      applicationId,
+      {
         ...(config.status ? { status: config.status } : {}),
         recruiterNotes,
-        communicationState: communicationState as Prisma.InputJsonObject,
+        communicationState: communicationState as JsonValue,
       },
-      select: {
-        id: true,
-        status: true,
-        recruiterNotes: true,
-      },
-    });
+      "id,status,recruiterNotes"
+    );
 
     return NextResponse.json({
       success: true,
