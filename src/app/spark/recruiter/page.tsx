@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import {
   ArrowRight,
   BriefcaseBusiness,
@@ -13,6 +14,7 @@ import {
   UserRoundCheck,
   Video,
 } from "lucide-react";
+import { getSparkRecruiterUser } from "@/lib/spark-auth";
 import {
   createInterviewRecordingSignedUrl,
   countPublishedJobs,
@@ -24,6 +26,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SparkInitials } from "@/components/spark/SparkBrand";
 import { SparkRecruiterActions } from "@/components/spark/SparkRecruiterActions";
+import { SparkRecruiterLogoutButton } from "@/components/spark/SparkRecruiterLogoutButton";
 
 export const dynamic = "force-dynamic";
 
@@ -229,6 +232,11 @@ function summaryPreview(value: unknown) {
 }
 
 export default async function SparkRecruiterPage() {
+  const recruiterUser = await getSparkRecruiterUser();
+  if (!recruiterUser) {
+    redirect("/spark/login?returnTo=/spark/recruiter");
+  }
+
   const [applications, statusRows, postingCount] = await Promise.all([
     listRecruiterApplications(),
     listApplicationStatuses(),
@@ -292,6 +300,12 @@ export default async function SparkRecruiterPage() {
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </Button>
+            <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--sn-muted)]">
+              <span className="sn-chip bg-white">
+                {recruiterUser.email || "Recruiter"}
+              </span>
+              <SparkRecruiterLogoutButton />
+            </div>
           </div>
 
           <div className="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
