@@ -50,7 +50,7 @@ create table if not exists "public"."SparkJobPosting" (
   "socTitle" text,
   "wcCode" text,
   "wcDescription" text,
-  "publicJobsBaseUrl" text not null default 'https://tcwtable.com/jobs',
+  "publicJobsBaseUrl" text not null default 'https://spark.tcwglobal.com/jobs',
   "publicUrl" text,
   "status" "public"."SparkPostingStatus" not null default 'Published',
   "rawPayload" jsonb not null,

@@ -13,7 +13,7 @@ staffing-studio-hub/
 The integration boundary is:
 
 ```text
-StaffingNation JD -> spark-jd-publish edge function -> Spark API receiver
+StaffingNation Job Order -> spark-job-order-publish edge function -> Spark API receiver
 ```
 
 StaffingNation keeps job description and job order source-of-truth data.
@@ -28,7 +28,7 @@ Spark app:
 http://localhost:3000
 ```
 
-Spark JD receiver:
+Spark job posting receiver:
 
 ```text
 http://localhost:3000/api/spark/job-postings
@@ -43,7 +43,7 @@ http://localhost:3000/spark/recruiter
 Public jobs base URL for generated posting links:
 
 ```text
-https://tcwtable.com/jobs
+https://spark.tcwglobal.com/jobs
 ```
 
 ## Spark Environment
@@ -58,7 +58,7 @@ SUPABASE_ANON_KEY="..."
 SUPABASE_SERVICE_ROLE_KEY="..."
 
 SPARK_API_KEY="replace-with-shared-secret"
-SPARK_PUBLIC_JOBS_BASE_URL="https://tcwtable.com/jobs"
+SPARK_PUBLIC_JOBS_BASE_URL="https://spark.tcwglobal.com/jobs"
 
 OPENAI_API_KEY=
 ```
@@ -72,8 +72,10 @@ deployed edge functions:
 
 ```env
 SPARK_JD_PUBLISH_URL="http://localhost:3000/api/spark/job-postings"
+# Optional clearer alias for the new job-order publisher:
+# SPARK_JOB_ORDER_PUBLISH_URL="http://localhost:3000/api/spark/job-postings"
 SPARK_API_KEY="same-value-as-spark"
-SPARK_PUBLIC_JOBS_BASE_URL="https://tcwtable.com/jobs"
+SPARK_PUBLIC_JOBS_BASE_URL="https://spark.tcwglobal.com/jobs"
 ```
 
 ## Commands
@@ -113,16 +115,17 @@ tools\pnpm.exe dev
 ## First Integration Test
 
 1. Start Spark on `localhost:3000`.
-2. Set `SPARK_JD_PUBLISH_URL` and `SPARK_API_KEY` in StaffingNation.
-3. In StaffingNation, activate a job description.
-4. Use the JD row menu action `Publish to Spark`.
+2. Set `SPARK_JD_PUBLISH_URL` or `SPARK_JOB_ORDER_PUBLISH_URL` and
+   `SPARK_API_KEY` in StaffingNation.
+3. In StaffingNation, create or open a job order.
+4. Use the Job Orders row menu action `Publish to Spark`.
 5. Spark should upsert a row in `SparkJobPosting` and return:
 
 ```json
 {
   "success": true,
   "spark_posting_id": "...",
-  "public_url": "https://tcwtable.com/jobs/...",
+  "public_url": "https://spark.tcwglobal.com/jobs/...",
   "source_entity_id": "..."
 }
 ```

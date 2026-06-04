@@ -210,18 +210,18 @@ export default async function JobDetailPage({
           <DetailSection
             title="Responsibilities"
             items={responsibilities}
-            fallback="Responsibilities will appear here when included in the StaffingNation job description."
+            fallback="Responsibilities will appear here when included in the StaffingNation job order."
             accent="var(--sn-coral)"
           />
           <DetailSection
             title="Requirements"
             items={requirements}
-            fallback="Requirements will appear here when included in the StaffingNation job description."
+            fallback="Requirements will appear here when included in the StaffingNation job order."
           />
           <DetailSection
             title="Qualifications"
             items={qualifications}
-            fallback="Qualifications will appear here when included in the StaffingNation job description."
+            fallback="Qualifications will appear here when included in the StaffingNation job order."
             accent="var(--sn-success)"
           />
         </div>

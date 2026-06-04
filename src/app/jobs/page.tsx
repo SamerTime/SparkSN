@@ -69,7 +69,7 @@ export default async function JobsPage() {
               Open roles ready for Spark review
             </h1>
             <p className="mt-4 max-w-2xl text-base leading-7 text-[var(--sn-muted)]">
-              Published job descriptions flow from StaffingNation into Spark so
+              Published job orders flow from StaffingNation into Spark so
               candidates can review the role, apply, and move into recruiter-led
               screening without mixing candidate data back into the source system.
             </p>
@@ -157,7 +157,7 @@ export default async function JobsPage() {
               No jobs published yet
             </h2>
             <p className="mt-2 text-sm text-[var(--sn-muted)]">
-              Publish an active job description from StaffingNation to see it here.
+              Publish a job order from StaffingNation to see it here.
             </p>
           </div>
         ) : (

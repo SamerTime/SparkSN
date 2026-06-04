@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { type JsonValue, upsertJobPostingBySourceEntityId } from "@/lib/spark-db";
 
-const EXPECTED_PAYLOAD_VERSION = "staffingnation.jd.v1";
-const DEFAULT_PUBLIC_JOBS_BASE_URL = "https://tcwtable.com/jobs";
+const SUPPORTED_PAYLOAD_VERSIONS = new Set([
+  "staffingnation.jd.v1",
+  "staffingnation.job_order.v1",
+]);
+const SUPPORTED_SOURCE_ENTITY_TYPES = new Set(["job_description", "job_order"]);
+const DEFAULT_PUBLIC_JOBS_BASE_URL = "https://spark.tcwglobal.com/jobs";
 
 type SparkPublishPayload = {
   payload_version?: string;
@@ -86,13 +90,16 @@ function slugify(title: string, sourceEntityId: string) {
 }
 
 function validatePayload(payload: SparkPublishPayload) {
-  if (payload.payload_version !== EXPECTED_PAYLOAD_VERSION) {
+  const payloadVersion = cleanText(payload.payload_version);
+  const sourceEntityType = cleanText(payload.source_entity_type);
+
+  if (!payloadVersion || !SUPPORTED_PAYLOAD_VERSIONS.has(payloadVersion)) {
     return "Unsupported payload_version";
   }
   if (payload.source_system !== "staffingnation") {
     return "Unsupported source_system";
   }
-  if (payload.source_entity_type !== "job_description") {
+  if (!sourceEntityType || !SUPPORTED_SOURCE_ENTITY_TYPES.has(sourceEntityType)) {
     return "Unsupported source_entity_type";
   }
   if (!cleanText(payload.source_entity_id)) {
@@ -123,6 +130,8 @@ export async function POST(req: NextRequest) {
     }
 
     const sourceEntityId = cleanText(payload.source_entity_id)!;
+    const sourceEntityType = cleanText(payload.source_entity_type)!;
+    const payloadVersion = cleanText(payload.payload_version)!;
     const title = cleanText(payload.job?.title)!;
     const slug = slugify(title, sourceEntityId);
     const publicJobsBaseUrl =
@@ -140,9 +149,9 @@ export async function POST(req: NextRequest) {
 
     const posting = await upsertJobPostingBySourceEntityId(sourceEntityId, {
       sourceSystem: "staffingnation",
-      sourceEntityType: "job_description",
+      sourceEntityType,
       sourceRevision: cleanText(payload.source_revision),
-      payloadVersion: EXPECTED_PAYLOAD_VERSION,
+      payloadVersion,
       clientId: cleanText(payload.client?.id)!,
       clientName: cleanText(payload.client?.name),
       title,

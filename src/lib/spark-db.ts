@@ -143,6 +143,30 @@ export type SparkPostingWriteResult = Pick<
   "id" | "publicUrl" | "sourceEntityId"
 >;
 
+export type SparkPostingRetractResult = Pick<
+  SparkJobPosting,
+  "id" | "sourceEntityId" | "sourceEntityType" | "status"
+>;
+
+export type SparkApplicantListItem = Pick<
+  SparkApplication,
+  | "id"
+  | "candidateName"
+  | "candidateEmail"
+  | "candidatePhone"
+  | "status"
+  | "interviewMedia"
+  | "aiSummary"
+  | "createdAt"
+  | "updatedAt"
+> & {
+  posting: Pick<SparkJobPosting, "id" | "title" | "slug" | "clientName">;
+  candidate: Pick<
+    SparkCandidateProfile,
+    "firstName" | "lastName" | "email" | "phone" | "city" | "state" | "country"
+  > | null;
+};
+
 let adminClient: SupabaseClient | null = null;
 
 function getRequiredEnv(name: string) {
@@ -273,6 +297,91 @@ export async function upsertJobPostingBySourceEntityId(
 
   if (error) fail(error, "Unable to create Spark job posting");
   return data as unknown as SparkPostingWriteResult;
+}
+
+export async function archiveJobPostingBySourceEntity(
+  sourceEntityId: string,
+  sourceEntityType = "job_order"
+): Promise<SparkPostingRetractResult | null> {
+  const timestamp = nowIso();
+  const { data, error } = await getSparkSupabase()
+    .from("SparkJobPosting")
+    .update({
+      status: "Archived",
+      lastSyncedAt: timestamp,
+      updatedAt: timestamp,
+    })
+    .eq("sourceEntityId", sourceEntityId)
+    .eq("sourceEntityType", sourceEntityType)
+    .select("id,sourceEntityId,sourceEntityType,status")
+    .maybeSingle();
+
+  if (error) fail(error, "Unable to retract Spark job posting");
+  return data as unknown as SparkPostingRetractResult | null;
+}
+
+export async function listApplicantsByPostingSourceEntity(
+  sourceEntityId: string,
+  sourceEntityType = "job_order"
+): Promise<SparkApplicantListItem[]> {
+  const supabase = getSparkSupabase();
+  const postingResponse = await supabase
+    .from("SparkJobPosting")
+    .select("id,title,slug,clientName")
+    .eq("sourceEntityId", sourceEntityId)
+    .eq("sourceEntityType", sourceEntityType)
+    .maybeSingle();
+
+  if (postingResponse.error) {
+    fail(postingResponse.error, "Unable to load Spark posting applicants");
+  }
+
+  if (!postingResponse.data) return [];
+
+  const appsResponse = await supabase
+    .from("SparkApplication")
+    .select(
+      "id,candidateId,candidateName,candidateEmail,candidatePhone,status,interviewMedia,aiSummary,createdAt,updatedAt"
+    )
+    .eq("postingId", postingResponse.data.id)
+    .order("createdAt", { ascending: false });
+
+  if (appsResponse.error) {
+    fail(appsResponse.error, "Unable to list Spark posting applicants");
+  }
+
+  const applications = appsResponse.data || [];
+  const candidateIds = [
+    ...new Set(
+      applications
+        .map((app) => app.candidateId)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+
+  const candidatesResponse =
+    candidateIds.length > 0
+      ? await supabase
+          .from("SparkCandidateProfile")
+          .select("id,firstName,lastName,email,phone,city,state,country")
+          .in("id", candidateIds)
+      : { data: [], error: null };
+
+  if (candidatesResponse.error) {
+    fail(candidatesResponse.error, "Unable to load Spark applicant profiles");
+  }
+
+  const candidatesById = new Map(
+    (candidatesResponse.data || []).map((candidate) => [candidate.id, candidate])
+  );
+
+  return applications.map((application) => ({
+    ...application,
+    posting: postingResponse.data,
+    candidate: application.candidateId
+      ? candidatesById.get(application.candidateId) || null
+      : null,
+  })) as unknown as SparkApplicantListItem[];
 }
 
 export async function getPublishedPostingForApplication(
