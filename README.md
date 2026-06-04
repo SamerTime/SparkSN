@@ -121,3 +121,11 @@ Version command: pnpm run upload:worker
 
 The deploy scripts pass `--keep-vars` so Cloudflare dashboard secrets are not
 removed during Worker deploys.
+
+The checked-in `wrangler.jsonc` includes public Supabase and Spark URL values.
+Cloudflare must still have these runtime secrets:
+
+```text
+SUPABASE_SERVICE_ROLE_KEY
+SPARK_API_KEY
+```

@@ -47,8 +47,6 @@ when the dashboard offers both.
 SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-SUPABASE_SERVICE_ROLE_KEY
-SPARK_API_KEY
 SPARK_PUBLIC_JOBS_BASE_URL
 ```
 
@@ -60,6 +58,15 @@ SPARK_PUBLIC_JOBS_BASE_URL=https://spark.tcwglobal.com/jobs
 
 `SUPABASE_SERVICE_ROLE_KEY` and `SPARK_API_KEY` should be secrets, not plain
 text variables.
+
+The non-secret values above are also checked into `wrangler.jsonc` so Worker
+deployments always have them. Keep only these values in the Cloudflare dashboard
+as secrets:
+
+```text
+SUPABASE_SERVICE_ROLE_KEY
+SPARK_API_KEY
+```
 
 ## Local Worker Build
 

@@ -3,10 +3,16 @@
   "name": "sparksn",
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-06-04",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": ["nodejs_compat", "nodejs_compat_populate_process_env"],
   "workers_dev": false,
   "preview_urls": false,
   "keep_vars": true,
+  "vars": {
+    "SUPABASE_URL": "https://xmidhrqlfsnkhoadpgsh.supabase.co",
+    "NEXT_PUBLIC_SUPABASE_URL": "https://xmidhrqlfsnkhoadpgsh.supabase.co",
+    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhtaWRocnFsZnNua2hvYWRwZ3NoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1Mjc4OTIsImV4cCI6MjA5NjEwMzg5Mn0.oedcQ3sAIq_kFSE8ABwKUA6ddBjOQD7M6WrY6wxqpaU",
+    "SPARK_PUBLIC_JOBS_BASE_URL": "https://spark.tcwglobal.com/jobs"
+  },
   "routes": [
     {
       "pattern": "spark.tcwglobal.com",
