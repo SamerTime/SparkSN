@@ -189,6 +189,15 @@ export type SparkApplicantListItem = Pick<
 
 let adminClient: SupabaseClient | null = null;
 
+export const SPARK_INTERVIEW_RECORDINGS_BUCKET = "spark-interview-recordings";
+
+const INTERVIEW_RECORDING_MIME_TYPES = [
+  "video/webm",
+  "video/mp4",
+  "video/quicktime",
+];
+const INTERVIEW_RECORDING_MAX_BYTES = 262_144_000;
+
 function getRequiredEnv(name: string) {
   const value = process.env[name]?.trim();
   if (!value) {
@@ -229,6 +238,93 @@ function nowIso() {
 
 function rowId() {
   return crypto.randomUUID();
+}
+
+function recordingExtension(contentType: string) {
+  if (contentType === "video/mp4") return "mp4";
+  if (contentType === "video/quicktime") return "mov";
+  return "webm";
+}
+
+function safeStorageSegment(value: string) {
+  return value.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80) || rowId();
+}
+
+export async function ensureInterviewRecordingBucket() {
+  const supabase = getSparkSupabase();
+  const { data: buckets, error: listError } =
+    await supabase.storage.listBuckets();
+
+  if (listError) fail(listError, "Unable to list Spark storage buckets");
+
+  const exists = (buckets || []).some(
+    (bucket) => bucket.name === SPARK_INTERVIEW_RECORDINGS_BUCKET
+  );
+  if (exists) return;
+
+  const { error } = await supabase.storage.createBucket(
+    SPARK_INTERVIEW_RECORDINGS_BUCKET,
+    {
+      public: false,
+      fileSizeLimit: INTERVIEW_RECORDING_MAX_BYTES,
+      allowedMimeTypes: INTERVIEW_RECORDING_MIME_TYPES,
+    }
+  );
+
+  if (error && !/already exists/i.test(error.message || "")) {
+    fail(error, "Unable to create Spark interview recording bucket");
+  }
+}
+
+export async function createInterviewRecordingUpload(
+  applicationId: string,
+  token: string,
+  contentType: string
+) {
+  await ensureInterviewRecordingBucket();
+
+  const normalizedContentType = contentType.split(";")[0];
+  if (!INTERVIEW_RECORDING_MIME_TYPES.includes(normalizedContentType)) {
+    throw new Error("Unsupported interview recording content type");
+  }
+
+  const extension = recordingExtension(normalizedContentType);
+  const path = [
+    safeStorageSegment(applicationId),
+    `${Date.now()}-${safeStorageSegment(token)}.${extension}`,
+  ].join("/");
+  const { data, error } = await getSparkSupabase()
+    .storage
+    .from(SPARK_INTERVIEW_RECORDINGS_BUCKET)
+    .createSignedUploadUrl(path);
+
+  if (error) fail(error, "Unable to create Spark recording upload URL");
+  if (!data?.token || !data?.path) {
+    throw new Error("Unable to create Spark recording upload URL");
+  }
+
+  return {
+    bucket: SPARK_INTERVIEW_RECORDINGS_BUCKET,
+    path: data.path,
+    token: data.token,
+  };
+}
+
+export async function createInterviewRecordingSignedUrl(
+  path: string,
+  expiresInSeconds = 3600
+) {
+  const { data, error } = await getSparkSupabase()
+    .storage
+    .from(SPARK_INTERVIEW_RECORDINGS_BUCKET)
+    .createSignedUrl(path, expiresInSeconds);
+
+  if (error) fail(error, "Unable to create Spark recording playback URL");
+  if (!data?.signedUrl) {
+    throw new Error("Unable to create Spark recording playback URL");
+  }
+
+  return data.signedUrl;
 }
 
 export async function listPublishedJobs(): Promise<SparkPublishedJobListItem[]> {

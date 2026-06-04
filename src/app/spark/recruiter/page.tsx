@@ -13,9 +13,11 @@ import {
   Video,
 } from "lucide-react";
 import {
+  createInterviewRecordingSignedUrl,
   countPublishedJobs,
   listApplicationStatuses,
   listRecruiterApplications,
+  SPARK_INTERVIEW_RECORDINGS_BUCKET,
 } from "@/lib/spark-db";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,6 +34,18 @@ type CommunicationEvent = {
   messagePreview?: string;
 };
 
+type RecordingReference = {
+  bucket: string;
+  path: string;
+  mimeType: string;
+  durationSeconds: number | null;
+  sizeBytes: number | null;
+};
+
+type RecordingView = RecordingReference & {
+  signedUrl: string;
+};
+
 function jsonObject(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -43,6 +57,33 @@ function communicationEvents(value: unknown): CommunicationEvent[] {
   return Array.isArray(state.events)
     ? (state.events as CommunicationEvent[]).slice(-4).reverse()
     : [];
+}
+
+function numberValue(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function recordingReference(value: unknown): RecordingReference | null {
+  const media = jsonObject(value);
+  const session = jsonObject(media.session);
+  const recording = jsonObject(session.recording);
+  const storage = jsonObject(recording.storage);
+  const bucket = typeof storage.bucket === "string" ? storage.bucket : "";
+  const path = typeof storage.path === "string" ? storage.path : "";
+
+  if (bucket !== SPARK_INTERVIEW_RECORDINGS_BUCKET || !path) {
+    return null;
+  }
+
+  return {
+    bucket,
+    path,
+    mimeType:
+      typeof recording.mimeType === "string" ? recording.mimeType : "video/webm",
+    durationSeconds: numberValue(recording.durationSeconds),
+    sizeBytes: numberValue(recording.sizeBytes),
+  };
 }
 
 function locationSummary(value: unknown) {
@@ -107,6 +148,20 @@ function formatEventDate(value?: string) {
   return formatDate(value);
 }
 
+function formatDuration(seconds: number | null) {
+  if (!seconds) return "";
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  if (!minutes) return `${remainingSeconds}s`;
+  return `${minutes}m ${remainingSeconds.toString().padStart(2, "0")}s`;
+}
+
+function formatBytes(bytes: number | null) {
+  if (!bytes) return "";
+  if (bytes < 1_000_000) return `${Math.round(bytes / 1_000)} KB`;
+  return `${(bytes / 1_000_000).toFixed(1)} MB`;
+}
+
 function summaryPreview(value: unknown) {
   const summary = jsonObject(value);
   const text =
@@ -125,6 +180,30 @@ export default async function SparkRecruiterPage() {
     listApplicationStatuses(),
     countPublishedJobs(),
   ]);
+  const recordingViewsById = new Map(
+    await Promise.all(
+      applications.map(async (application) => {
+        const recording = recordingReference(application.interviewMedia);
+        if (!recording) return [application.id, null] as const;
+
+        try {
+          const signedUrl = await createInterviewRecordingSignedUrl(
+            recording.path
+          );
+          return [
+            application.id,
+            {
+              ...recording,
+              signedUrl,
+            },
+          ] as const;
+        } catch (error) {
+          console.error("Unable to create Spark recording playback URL:", error);
+          return [application.id, null] as const;
+        }
+      })
+    )
+  );
 
   const totalApplications = statusRows.length;
   const waitingReview =
@@ -226,6 +305,9 @@ export default async function SparkRecruiterPage() {
           <div className="grid gap-4">
             {applications.map((application) => {
               const events = communicationEvents(application.communicationState);
+              const recordingView = recordingViewsById.get(application.id) as
+                | RecordingView
+                | null;
               const location = locationSummary(application.locationSignals);
               const needsLocationReview = location === "Location needs review";
               const candidateName =
@@ -333,6 +415,28 @@ export default async function SparkRecruiterPage() {
                           )}
                         </section>
                       </div>
+
+                      {recordingView && (
+                        <section className="mt-4 rounded-lg border border-[var(--sn-line)] bg-white p-4">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex items-center gap-2 text-sm font-extrabold text-[var(--sn-ink)]">
+                              <Video className="h-4 w-4 text-[var(--sn-blue)]" />
+                              Interview recording
+                            </div>
+                            <span className="sn-chip py-1 text-xs">
+                              {[formatDuration(recordingView.durationSeconds), formatBytes(recordingView.sizeBytes)]
+                                .filter(Boolean)
+                                .join(" / ") || "Video captured"}
+                            </span>
+                          </div>
+                          <video
+                            controls
+                            preload="metadata"
+                            src={recordingView.signedUrl}
+                            className="mt-3 aspect-video w-full rounded-lg bg-black"
+                          />
+                        </section>
+                      )}
 
                       <section className="mt-4 rounded-lg border border-[var(--sn-line)] bg-white p-4">
                         <div className="flex flex-wrap items-center justify-between gap-3">

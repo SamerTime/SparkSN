@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   getApplicationByInterviewToken,
+  SPARK_INTERVIEW_RECORDINGS_BUCKET,
   type JsonValue,
   updateApplication,
 } from "@/lib/spark-db";
@@ -124,6 +125,12 @@ export async function POST(
 
     const now = new Date().toISOString();
     const recording = jsonObject(body.recording);
+    const recordingStorage = jsonObject(recording.storage);
+    const recordingBucket = stringValue(recordingStorage.bucket);
+    const recordingPath = stringValue(recordingStorage.path);
+    const validRecordingStorage =
+      recordingBucket === SPARK_INTERVIEW_RECORDINGS_BUCKET &&
+      recordingPath.startsWith(`${application.id}/`);
     const browser = jsonObject(body.browser);
     const recordingSeconds = numberValue(recording.durationSeconds);
     const transcript: JsonValue = {
@@ -140,7 +147,15 @@ export async function POST(
         durationSeconds: recordingSeconds,
         mimeType: stringValue(recording.mimeType),
         sizeBytes: numberValue(recording.sizeBytes),
-        storage: "pending_supabase_storage",
+        storage: validRecordingStorage
+          ? {
+              bucket: recordingBucket,
+              path: recordingPath,
+              uploadedAt: stringValue(recordingStorage.uploadedAt) || now,
+            }
+          : {
+              status: "missing",
+            },
       },
     }) as JsonValue;
     const aiSummary = createSummary(

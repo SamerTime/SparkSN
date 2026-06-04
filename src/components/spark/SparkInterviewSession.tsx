@@ -1,5 +1,6 @@
 "use client";
 
+import { createClient } from "@supabase/supabase-js";
 import { useEffect, useRef, useState } from "react";
 import {
   Camera,
@@ -29,6 +30,26 @@ type Answer = {
   answer: string;
 };
 
+type RecordingCapture = {
+  blob: Blob | null;
+  captured: boolean;
+  durationSeconds: number;
+  mimeType: string;
+  sizeBytes: number;
+};
+
+type RecordingUploadResponse = {
+  bucket: string;
+  path: string;
+  uploadToken: string;
+};
+
+const RECORDING_MIME_TYPES = [
+  "video/webm;codecs=vp9,opus",
+  "video/webm;codecs=vp8,opus",
+  "video/webm",
+];
+
 function browserSignals() {
   return {
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -39,6 +60,34 @@ function browserSignals() {
       height: window.screen.height,
     },
   };
+}
+
+function getRecordingMimeType() {
+  if (!("MediaRecorder" in window)) return "";
+  return (
+    RECORDING_MIME_TYPES.find((type) => MediaRecorder.isTypeSupported(type)) ||
+    ""
+  );
+}
+
+function storageContentType(mimeType: string) {
+  return mimeType.split(";")[0] || "video/webm";
+}
+
+function getBrowserSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+
+  if (!url || !key) {
+    throw new Error("Missing Supabase browser configuration.");
+  }
+
+  return createClient(url, key, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
 }
 
 export function SparkInterviewSession({
@@ -54,6 +103,7 @@ export function SparkInterviewSession({
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const startedAtRef = useRef<number | null>(null);
+  const captureRef = useRef<RecordingCapture | null>(null);
 
   const [phase, setPhase] = useState<InterviewPhase>(
     initialStatus === "completed" || initialStatus === "InterviewCompleted"
@@ -92,14 +142,19 @@ export function SparkInterviewSession({
       return;
     }
 
-    const recorder = new MediaRecorder(stream);
+    const mimeType = getRecordingMimeType();
+    const recorder = new MediaRecorder(stream, {
+      ...(mimeType ? { mimeType } : {}),
+      videoBitsPerSecond: 550_000,
+      audioBitsPerSecond: 64_000,
+    });
     chunksRef.current = [];
     recorder.ondataavailable = (event) => {
       if (event.data.size > 0) {
         chunksRef.current.push(event.data);
       }
     };
-    recorder.start();
+    recorder.start(1000);
     recorderRef.current = recorder;
   };
 
@@ -137,10 +192,10 @@ export function SparkInterviewSession({
     }
   };
 
-  const stopRecorder = async () => {
+  const stopRecorder = async (): Promise<RecordingCapture> => {
     const recorder = recorderRef.current;
     if (!recorder || recorder.state === "inactive") {
-      return recordingMeta;
+      return captureRef.current || { ...recordingMeta, blob: null };
     }
 
     const stopped = new Promise<void>((resolve) => {
@@ -162,7 +217,70 @@ export function SparkInterviewSession({
       sizeBytes: blob.size,
     };
     setRecordingMeta(meta);
-    return meta;
+    const capture = {
+      ...meta,
+      blob,
+    };
+    captureRef.current = capture;
+    return capture;
+  };
+
+  const uploadRecording = async (capture: RecordingCapture) => {
+    if (!capture.captured || !capture.blob) {
+      return {
+        captured: false,
+        durationSeconds: capture.durationSeconds,
+        mimeType: capture.mimeType,
+        sizeBytes: capture.sizeBytes,
+      };
+    }
+
+    const contentType = storageContentType(capture.mimeType);
+    const response = await fetch(`/api/spark/interviews/${token}/upload`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contentType,
+        sizeBytes: capture.sizeBytes,
+      }),
+    });
+    const upload = (await response.json()) as Partial<RecordingUploadResponse> & {
+      success?: boolean;
+      error?: string;
+    };
+
+    if (
+      !response.ok ||
+      !upload.success ||
+      !upload.bucket ||
+      !upload.path ||
+      !upload.uploadToken
+    ) {
+      throw new Error(upload.error || "Unable to prepare video upload.");
+    }
+
+    const supabase = getBrowserSupabase();
+    const { error } = await supabase.storage
+      .from(upload.bucket)
+      .uploadToSignedUrl(upload.path, upload.uploadToken, capture.blob, {
+        contentType,
+      });
+
+    if (error) {
+      throw new Error(error.message || "Unable to upload interview video.");
+    }
+
+    return {
+      captured: true,
+      durationSeconds: capture.durationSeconds,
+      mimeType: contentType,
+      sizeBytes: capture.sizeBytes,
+      storage: {
+        bucket: upload.bucket,
+        path: upload.path,
+        uploadedAt: new Date().toISOString(),
+      },
+    };
   };
 
   const saveCurrentAnswer = () => {
@@ -195,8 +313,9 @@ export function SparkInterviewSession({
 
     setLoading(true);
     try {
-      const recording = await stopRecorder();
+      const capture = await stopRecorder();
       streamRef.current?.getTracks().forEach((track) => track.stop());
+      const recording = await uploadRecording(capture);
 
       const response = await fetch(`/api/spark/interviews/${token}/complete`, {
         method: "POST",
