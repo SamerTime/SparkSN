@@ -2,7 +2,16 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Loader2, LocateFixed, ShieldCheck } from "lucide-react";
+import {
+  Camera,
+  CheckCircle2,
+  Loader2,
+  LocateFixed,
+  MapPin,
+  Mic,
+  ShieldCheck,
+  UserRound,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +20,9 @@ import { Label } from "@/components/ui/label";
 type SparkApplyFormProps = {
   postingSlug: string;
   postingTitle: string;
+  clientName?: string | null;
+  locationLabel?: string;
+  payLabel?: string;
 };
 
 type LocationCapture = {
@@ -28,6 +40,9 @@ type Submission = {
 export function SparkApplyForm({
   postingSlug,
   postingTitle,
+  clientName,
+  locationLabel,
+  payLabel,
 }: SparkApplyFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -151,240 +166,334 @@ export function SparkApplyForm({
 
   if (submission) {
     return (
-      <div className="rounded-md border border-[#b7d4cb] bg-white p-6 shadow-sm">
-        <div className="flex h-12 w-12 items-center justify-center rounded-md bg-[#edf5f1] text-[#176c5d]">
-          <CheckCircle2 className="h-6 w-6" />
-        </div>
-        <h2 className="mt-5 text-2xl font-semibold text-[#15191e]">
-          Profile submitted
-        </h2>
-        <p className="mt-3 text-sm leading-6 text-[#59616b]">
-          Spark created application{" "}
-          <span className="font-medium text-[#15191e]">
-            {submission.applicationId}
-          </span>{" "}
-          for {postingTitle}. {submission.nextStep}
-        </p>
-        <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-          <Button
-            type="button"
-            className="bg-[#20282d] text-white hover:bg-[#344047]"
-            onClick={() => router.push("/jobs")}
-          >
-            Back to jobs
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="border-[#d8d1c6]"
-            onClick={() => router.push("/spark/recruiter")}
-          >
-            View recruiter queue
-          </Button>
+      <div className="flex min-h-[720px] flex-col bg-[var(--sn-soft)] px-5 pb-5 pt-16">
+        <div className="sn-card flex flex-1 flex-col justify-center p-5 text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-lg bg-[var(--sn-success-50)] text-[var(--sn-success)]">
+            <CheckCircle2 className="h-7 w-7" />
+          </div>
+          <h2 className="mt-5 text-2xl font-extrabold text-[var(--sn-ink)]">
+            Profile submitted
+          </h2>
+          <p className="mt-3 text-sm leading-6 text-[var(--sn-muted)]">
+            Spark created application{" "}
+            <span className="font-bold text-[var(--sn-ink)]">
+              {submission.applicationId}
+            </span>{" "}
+            for {postingTitle}. {submission.nextStep}
+          </p>
+          <div className="mt-6 grid gap-3">
+            <Button
+              type="button"
+              className="sn-button-primary h-11"
+              onClick={() => router.push("/jobs")}
+            >
+              Back to jobs
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 border-[var(--sn-line)]"
+              onClick={() => router.push("/spark/recruiter")}
+            >
+              View recruiter queue
+            </Button>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <form
-      onSubmit={submit}
-      className="rounded-md border border-[#d8d1c6] bg-white p-5 shadow-sm sm:p-6"
-    >
-      <div>
-        <h2 className="text-2xl font-semibold text-[#15191e]">
-          Create Spark profile
-        </h2>
-        <p className="mt-2 text-sm leading-6 text-[#59616b]">
-          This starts recruiter review for {postingTitle}. The short AI video
-          interview is only sent after a recruiter approves or invites you.
-        </p>
-      </div>
-
-      <div className="mt-6 grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="firstName">First name</Label>
-          <Input
-            id="firstName"
-            value={form.firstName}
-            onChange={(event) => updateField("firstName", event.target.value)}
-            required
-            autoComplete="given-name"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="lastName">Last name</Label>
-          <Input
-            id="lastName"
-            value={form.lastName}
-            onChange={(event) => updateField("lastName", event.target.value)}
-            required
-            autoComplete="family-name"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
-          <Input
-            id="email"
-            type="email"
-            value={form.email}
-            onChange={(event) => updateField("email", event.target.value)}
-            required
-            autoComplete="email"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="phone">Phone</Label>
-          <Input
-            id="phone"
-            type="tel"
-            value={form.phone}
-            onChange={(event) => updateField("phone", event.target.value)}
-            required
-            autoComplete="tel"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="city">City</Label>
-          <Input
-            id="city"
-            value={form.city}
-            onChange={(event) => updateField("city", event.target.value)}
-            autoComplete="address-level2"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="state">State</Label>
-          <Input
-            id="state"
-            value={form.state}
-            onChange={(event) => updateField("state", event.target.value)}
-            autoComplete="address-level1"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="availableToStart">Availability</Label>
-          <Input
-            id="availableToStart"
-            value={form.availableToStart}
-            onChange={(event) =>
-              updateField("availableToStart", event.target.value)
-            }
-            placeholder="Immediately, 2 weeks, specific date"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="preferredChannel">Preferred communication</Label>
-          <select
-            id="preferredChannel"
-            value={form.preferredChannel}
-            onChange={(event) =>
-              updateField("preferredChannel", event.target.value)
-            }
-            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          >
-            <option value="sms">Text message</option>
-            <option value="email">Email</option>
-            <option value="phone">Phone call</option>
-          </select>
-        </div>
-      </div>
-
-      <div className="mt-4 space-y-2">
-        <Label htmlFor="experienceSummary">Relevant experience</Label>
-        <textarea
-          id="experienceSummary"
-          value={form.experienceSummary}
-          onChange={(event) =>
-            updateField("experienceSummary", event.target.value)
-          }
-          placeholder="A few sentences about work you have done that relates to this role."
-          className="min-h-28 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-        />
-      </div>
-
-      <div className="mt-6 rounded-md border border-[#d8d1c6] bg-[#f7f4ef] p-4">
-        <div className="flex items-start gap-3">
-          <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#176c5d]" />
+    <form onSubmit={submit} className="flex min-h-[720px] flex-col bg-[var(--sn-soft)]">
+      <header className="spark-mobile-header px-5 pb-4 pt-16">
+        <div className="flex items-center justify-between gap-3">
           <div>
-            <h3 className="font-semibold text-[#15191e]">
-              Consent and fraud review
-            </h3>
-            <p className="mt-1 text-sm leading-6 text-[#59616b]">
-              Spark uses these consents before sending a mobile interview link
-              and capturing location signals for identity and fraud review.
+            <p className="text-xs font-extrabold uppercase tracking-normal text-[var(--sn-blue-700)]">
+              Quick apply
             </p>
+            <h2 className="mt-1 text-xl font-extrabold text-[var(--sn-ink)]">
+              {postingTitle}
+            </h2>
           </div>
+          <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[var(--sn-coral)] text-white">
+            <UserRound className="h-5 w-5" />
+          </span>
         </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {clientName && <span className="sn-chip sn-chip-blue">{clientName}</span>}
+          {payLabel && <span className="sn-chip sn-chip-success">{payLabel}</span>}
+          {locationLabel && (
+            <span className="sn-chip">
+              <MapPin className="h-3.5 w-3.5 text-[var(--sn-blue)]" />
+              {locationLabel}
+            </span>
+          )}
+        </div>
+      </header>
 
-        <div className="mt-4 grid gap-3 text-sm text-[#4f5963]">
-          <label className="flex gap-3">
-            <input
-              type="checkbox"
-              checked={form.aiInterviewConsent}
-              onChange={(event) =>
-                updateField("aiInterviewConsent", event.target.checked)
-              }
-              className="mt-1 h-4 w-4 shrink-0 accent-[#176c5d]"
-              required
-            />
-            I consent to a short AI-assisted interview for this job.
-          </label>
-          <label className="flex gap-3">
-            <input
-              type="checkbox"
-              checked={form.recordingConsent}
-              onChange={(event) =>
-                updateField("recordingConsent", event.target.checked)
-              }
-              className="mt-1 h-4 w-4 shrink-0 accent-[#176c5d]"
-              required
-            />
-            I consent to camera and microphone recording when I start the
-            interview.
-          </label>
-          <label className="flex gap-3">
-            <input
-              type="checkbox"
-              checked={form.geolocationConsent}
-              onChange={(event) =>
-                updateField("geolocationConsent", event.target.checked)
-              }
-              className="mt-1 h-4 w-4 shrink-0 accent-[#176c5d]"
-              required
-            />
-            I consent to location capture for identity, fraud, and job-fit
-            review.
-          </label>
-        </div>
+      <div className="flex-1 space-y-4 px-4 py-4">
+        <section className="sn-card p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-base font-extrabold text-[var(--sn-ink)]">
+                Your profile
+              </h3>
+              <p className="mt-1 text-xs leading-5 text-[var(--sn-muted)]">
+                Used by recruiters for this Spark application only.
+              </p>
+            </div>
+            <span className="sn-chip sn-chip-coral">Step 1</span>
+          </div>
 
-        <div className="mt-4 flex flex-col gap-3 rounded-md bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-sm text-[#59616b]">{locationStatus}</div>
-          <Button
-            type="button"
-            variant="outline"
-            className="border-[#d8d1c6]"
-            onClick={captureLocation}
-            disabled={capturingLocation}
-          >
-            {capturingLocation ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <LocateFixed className="h-4 w-4" />
-            )}
-            Capture location
-          </Button>
-        </div>
+          <div className="mt-4 grid gap-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="firstName">First name</Label>
+                <Input
+                  id="firstName"
+                  value={form.firstName}
+                  onChange={(event) => updateField("firstName", event.target.value)}
+                  required
+                  autoComplete="given-name"
+                  className="sn-input h-11"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="lastName">Last name</Label>
+                <Input
+                  id="lastName"
+                  value={form.lastName}
+                  onChange={(event) => updateField("lastName", event.target.value)}
+                  required
+                  autoComplete="family-name"
+                  className="sn-input h-11"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={form.email}
+                onChange={(event) => updateField("email", event.target.value)}
+                required
+                autoComplete="email"
+                className="sn-input h-11"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="phone">Phone</Label>
+              <Input
+                id="phone"
+                type="tel"
+                value={form.phone}
+                onChange={(event) => updateField("phone", event.target.value)}
+                required
+                autoComplete="tel"
+                className="sn-input h-11"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="city">City</Label>
+                <Input
+                  id="city"
+                  value={form.city}
+                  onChange={(event) => updateField("city", event.target.value)}
+                  autoComplete="address-level2"
+                  className="sn-input h-11"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="state">State</Label>
+                <Input
+                  id="state"
+                  value={form.state}
+                  onChange={(event) => updateField("state", event.target.value)}
+                  autoComplete="address-level1"
+                  className="sn-input h-11"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="availableToStart">Availability</Label>
+                <Input
+                  id="availableToStart"
+                  value={form.availableToStart}
+                  onChange={(event) =>
+                    updateField("availableToStart", event.target.value)
+                  }
+                  placeholder="Immediately"
+                  className="sn-input h-11"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="preferredChannel">Contact</Label>
+                <select
+                  id="preferredChannel"
+                  value={form.preferredChannel}
+                  onChange={(event) =>
+                    updateField("preferredChannel", event.target.value)
+                  }
+                  className="sn-input h-11 w-full px-3 text-sm"
+                >
+                  <option value="sms">Text</option>
+                  <option value="email">Email</option>
+                  <option value="phone">Call</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="sn-card p-4">
+          <h3 className="text-base font-extrabold text-[var(--sn-ink)]">
+            Relevant experience
+          </h3>
+          <p className="mt-1 text-xs leading-5 text-[var(--sn-muted)]">
+            A short note helps the recruiter review faster.
+          </p>
+          <textarea
+            id="experienceSummary"
+            value={form.experienceSummary}
+            onChange={(event) =>
+              updateField("experienceSummary", event.target.value)
+            }
+            placeholder="A few sentences about work you have done that relates to this role."
+            className="sn-input mt-3 min-h-28 w-full px-3 py-2 text-sm"
+          />
+        </section>
+
+        <section className="sn-card p-4">
+          <div className="flex items-start gap-3">
+            <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[var(--sn-blue)]" />
+            <div>
+              <h3 className="text-base font-extrabold text-[var(--sn-ink)]">
+                Screening readiness
+              </h3>
+              <p className="mt-1 text-xs leading-5 text-[var(--sn-muted)]">
+                These checks support the future short mobile interview and
+                recruiter fraud review.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3">
+            <div className="flex items-center gap-3 rounded-lg border border-[var(--sn-line)] bg-white p-3">
+              <Camera className="h-5 w-5 text-[var(--sn-coral)]" />
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-[var(--sn-ink)]">
+                  Camera
+                </p>
+                <p className="text-xs text-[var(--sn-muted)]">
+                  Needed only after recruiter approval.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 rounded-lg border border-[var(--sn-line)] bg-white p-3">
+              <Mic className="h-5 w-5 text-[var(--sn-blue)]" />
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-[var(--sn-ink)]">
+                  Microphone
+                </p>
+                <p className="text-xs text-[var(--sn-muted)]">
+                  Used for the short video answers.
+                </p>
+              </div>
+            </div>
+            <div className="rounded-lg border border-[var(--sn-line)] bg-white p-3">
+              <div className="flex items-start gap-3">
+                <LocateFixed className="mt-0.5 h-5 w-5 shrink-0 text-[var(--sn-success)]" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold text-[var(--sn-ink)]">
+                    Location signal
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-[var(--sn-muted)]">
+                    {locationStatus}
+                  </p>
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-3 h-10 w-full border-[var(--sn-line)]"
+                onClick={captureLocation}
+                disabled={capturingLocation}
+              >
+                {capturingLocation ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <LocateFixed className="h-4 w-4" />
+                )}
+                Capture location
+              </Button>
+            </div>
+          </div>
+        </section>
+
+        <section className="sn-card p-4">
+          <h3 className="text-base font-extrabold text-[var(--sn-ink)]">
+            Consent
+          </h3>
+          <div className="mt-3 grid gap-3 text-sm text-[var(--sn-ink-2)]">
+            <label className="flex gap-3">
+              <input
+                type="checkbox"
+                checked={form.aiInterviewConsent}
+                onChange={(event) =>
+                  updateField("aiInterviewConsent", event.target.checked)
+                }
+                className="mt-1 h-4 w-4 shrink-0 accent-[var(--sn-blue)]"
+                required
+              />
+              <span>I consent to a short AI-assisted interview for this job.</span>
+            </label>
+            <label className="flex gap-3">
+              <input
+                type="checkbox"
+                checked={form.recordingConsent}
+                onChange={(event) =>
+                  updateField("recordingConsent", event.target.checked)
+                }
+                className="mt-1 h-4 w-4 shrink-0 accent-[var(--sn-blue)]"
+                required
+              />
+              <span>
+                I consent to camera and microphone recording when I start the
+                interview.
+              </span>
+            </label>
+            <label className="flex gap-3">
+              <input
+                type="checkbox"
+                checked={form.geolocationConsent}
+                onChange={(event) =>
+                  updateField("geolocationConsent", event.target.checked)
+                }
+                className="mt-1 h-4 w-4 shrink-0 accent-[var(--sn-blue)]"
+                required
+              />
+              <span>
+                I consent to location capture for identity, fraud, and job-fit
+                review.
+              </span>
+            </label>
+          </div>
+        </section>
       </div>
 
-      <Button
-        type="submit"
-        disabled={loading}
-        className="mt-6 w-full bg-[#20282d] text-white hover:bg-[#344047]"
-      >
-        {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-        Submit for recruiter review
-      </Button>
+      <div className="sticky bottom-0 border-t border-[var(--sn-line)] bg-white p-4">
+        <Button
+          type="submit"
+          disabled={loading}
+          className="sn-button-coral h-12 w-full text-base font-extrabold"
+        >
+          {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+          Submit for recruiter review
+        </Button>
+      </div>
     </form>
   );
 }

@@ -32,34 +32,34 @@ export default function NotFound() {
   }, [router]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#f7f4ef] p-4">
-      <Card className="w-full max-w-md overflow-hidden rounded-md border border-[#d8d1c6] shadow-sm">
-        <div className="bg-[#176c5d] p-1"></div>
+    <div className="sn-page flex items-center justify-center p-4">
+      <Card className="w-full max-w-md overflow-hidden rounded-lg border border-[var(--sn-line)] shadow-sm">
+        <div className="bg-[var(--sn-coral)] p-1"></div>
 
         <CardContent className="p-6">
           <div className="text-center space-y-6">
             <div className="space-y-2">
               <div className="flex justify-center">
-                <div className="rounded-full bg-[#edf5f1] p-4">
-                  <AlertCircle className="h-12 w-12 text-[#176c5d]" />
+                <div className="rounded-lg bg-[var(--sn-blue-50)] p-4">
+                  <AlertCircle className="h-12 w-12 text-[var(--sn-blue)]" />
                 </div>
               </div>
-              <h1 className="text-4xl font-bold text-gray-800">404</h1>
-              <h2 className="text-2xl font-semibold text-gray-700">
+              <h1 className="text-4xl font-extrabold text-[var(--sn-ink)]">404</h1>
+              <h2 className="text-2xl font-extrabold text-[var(--sn-ink-2)]">
                 Page Not Found
               </h2>
             </div>
 
-            <p className="rounded-md border border-[#d8d1c6] bg-[#fdfaf4] p-4 text-sm text-[#59616b]">
+            <p className="rounded-lg border border-[var(--sn-line)] bg-white p-4 text-sm text-[var(--sn-muted)]">
               The page you&apos;re looking for doesn&apos;t exist or has been
               moved.
             </p>
 
-            <div className="flex items-center justify-center gap-2 text-gray-500">
+            <div className="flex items-center justify-center gap-2 text-[var(--sn-muted)]">
               <Clock className="h-5 w-5" />
               <p className="text-sm">
                 Redirecting in{" "}
-                <span className="font-bold text-[#176c5d]">{countdown}</span>{" "}
+                <span className="font-bold text-[var(--sn-blue-700)]">{countdown}</span>{" "}
                 seconds...
               </p>
             </div>
@@ -71,7 +71,7 @@ export default function NotFound() {
             onClick={() => {
               router.push("/jobs");
             }}
-            className="w-full bg-[#20282d] hover:bg-[#344047]"
+            className="sn-button-primary w-full"
           >
             Go to jobs
             <Home className="ml-2 h-4 w-4" />

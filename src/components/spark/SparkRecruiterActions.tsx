@@ -70,14 +70,14 @@ export function SparkRecruiterActions({
         value={notes}
         onChange={(event) => setNotes(event.target.value)}
         placeholder="Recruiter notes, screening context, follow-up details"
-        className="min-h-24 w-full rounded-md border border-[#d8d1c6] bg-white px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-[#8a929b] focus-visible:ring-2 focus-visible:ring-[#176c5d] focus-visible:ring-offset-2"
+        className="sn-input min-h-28 w-full px-3 py-2 text-sm placeholder:text-[var(--sn-muted)]"
       />
       <div className="flex flex-wrap gap-2">
         <Button
           type="button"
           size="sm"
           variant="outline"
-          className="border-[#d8d1c6]"
+          className="border-[var(--sn-line)] bg-white"
           disabled={Boolean(loadingAction)}
           onClick={() => runAction("save_notes")}
         >
@@ -87,7 +87,7 @@ export function SparkRecruiterActions({
         <Button
           type="button"
           size="sm"
-          className="bg-[#176c5d] text-white hover:bg-[#14594d]"
+          className="bg-[var(--sn-success)] text-white hover:bg-[#1f9651]"
           disabled={Boolean(loadingAction)}
           onClick={() => runAction("approve")}
         >
@@ -97,7 +97,7 @@ export function SparkRecruiterActions({
         <Button
           type="button"
           size="sm"
-          className="bg-[#20282d] text-white hover:bg-[#344047]"
+          className="sn-button-coral"
           disabled={Boolean(loadingAction)}
           onClick={() => runAction("invite_interview")}
         >
@@ -108,7 +108,7 @@ export function SparkRecruiterActions({
           type="button"
           size="sm"
           variant="outline"
-          className="border-[#d8d1c6] text-[#8a3c2f] hover:bg-[#f7ece8] hover:text-[#8a3c2f]"
+          className="border-[var(--sn-coral-100)] bg-white text-[var(--sn-danger)] hover:bg-[var(--sn-danger-50)] hover:text-[var(--sn-danger)]"
           disabled={Boolean(loadingAction)}
           onClick={() => runAction("decline")}
         >
