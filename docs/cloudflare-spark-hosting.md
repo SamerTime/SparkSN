@@ -8,7 +8,7 @@ https://spark.tcwglobal.com
 
 For the first hosted version, use Cloudflare as the public front door and keep
 Spark running as a normal Next.js app behind it. This fits the current stack:
-Next.js, Prisma, PostgreSQL, Redis, NextAuth, and Spark API routes.
+Next.js, Prisma, PostgreSQL/Supabase, and Spark API routes.
 
 ## Cloudflare Dashboard Setup
 
@@ -43,7 +43,6 @@ Add the copied token to `.env`:
 
 ```env
 CLOUDFLARE_TUNNEL_TOKEN="paste-cloudflare-token-here"
-NEXTAUTH_URL="https://spark.tcwglobal.com"
 SPARK_PUBLIC_JOBS_BASE_URL="https://spark.tcwglobal.com/jobs"
 ```
 
@@ -74,7 +73,7 @@ https://spark.tcwglobal.com/jobs
 ## If You Created A Cloudflare Worker Build
 
 The current Spark app is a normal Next.js server app with Prisma, PostgreSQL,
-Redis, NextAuth, and API routes. A Cloudflare Worker project connected to GitHub
+and API routes. A Cloudflare Worker project connected to GitHub
 with these settings is not enough:
 
 ```text
@@ -89,12 +88,11 @@ Problems with that setup:
 - Cloudflare is building `main`, while the current Spark work is on
   `spark-module-setup`.
 - The build needs environment variables, at minimum `DATABASE_URL`,
-  `AUTH_SECRET`, `NEXTAUTH_URL`, `SPARK_API_KEY`, and
-  `SPARK_PUBLIC_JOBS_BASE_URL`.
+  `SPARK_API_KEY`, and `SPARK_PUBLIC_JOBS_BASE_URL`.
 - A Next.js app on Cloudflare Workers needs the OpenNext Cloudflare adapter, not
   plain `npx wrangler deploy`.
-- The current Prisma/Postgres/Redis runtime should be hosted behind Cloudflare
-  first. Moving the app fully into Workers is a later architecture change.
+- The current Prisma/Postgres runtime should be hosted behind Cloudflare first.
+  Moving the app fully into Workers is a later architecture change.
 
 For now, use the Tunnel setup above. If Spark later moves fully to Workers, add
 OpenNext, Wrangler config, Cloudflare-compatible database access, and Worker
@@ -102,10 +100,9 @@ secrets as a separate build slice.
 
 ## Production Notes
 
-- `NEXTAUTH_URL` must be `https://spark.tcwglobal.com`.
 - `SPARK_PUBLIC_JOBS_BASE_URL` must be `https://spark.tcwglobal.com/jobs`.
 - `SPARK_API_KEY` must match the StaffingNation publish secret.
-- Keep Postgres and Redis off the public internet.
+- Keep database credentials in the host secret manager.
 - Cloudflare should terminate HTTPS and proxy only to Spark.
 - The Spark pages that read database data are marked dynamic so Docker builds do
   not need live database reads during image creation.

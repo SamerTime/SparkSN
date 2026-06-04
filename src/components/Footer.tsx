@@ -41,16 +41,19 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/login" className="transition hover:text-[#15191e]">
-                  Sign in
-                </Link>
-              </li>
-              <li>
                 <Link
                   href="/spark/recruiter"
                   className="transition hover:text-[#15191e]"
                 >
                   Recruiter review
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/jobs"
+                  className="transition hover:text-[#15191e]"
+                >
+                  Publish-ready feed
                 </Link>
               </li>
             </ul>

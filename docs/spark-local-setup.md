@@ -53,16 +53,11 @@ Create `.env` from `.env.example` and set:
 
 ```env
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/staffingnation_spark"
-REDIS_URL="redis://localhost:6379"
-
-NEXTAUTH_URL="http://localhost:3000"
-AUTH_SECRET="replace-me"
 
 SPARK_API_KEY="replace-with-shared-secret"
 SPARK_PUBLIC_JOBS_BASE_URL="https://tcwtable.com/jobs"
 
 OPENAI_API_KEY=
-GEMINI_API_KEY=
 ```
 
 ## StaffingNation Environment
@@ -84,10 +79,10 @@ Install dependencies:
 pnpm install
 ```
 
-Start database/Redis if using Docker:
+Start the database if using Docker:
 
 ```bash
-docker-compose up -d
+docker compose up -d db
 ```
 
 Apply migrations and generate Prisma client:

@@ -19,8 +19,7 @@ short mobile interview, recruiter review, and AI summary workflow.
 - Cloudflare Tunnel config is available for `spark.tcwglobal.com`.
 - Supabase project setup is documented for Spark backend data and storage.
 - GitHub Actions can deploy checked-in Prisma migrations to Supabase.
-- Prisma models now separate Spark postings, candidate profiles, and
-  applications from the legacy app data.
+- Prisma is trimmed to Spark postings, candidate profiles, and applications.
 - `staffing-studio-hub` contains the matching Staffing Studio publish function
   and job description UI action.
 
@@ -50,7 +49,7 @@ Prerequisites:
 Start the local services:
 
 ```powershell
-docker compose up -d db redis
+docker compose up -d db
 ```
 
 Install dependencies:
@@ -79,11 +78,9 @@ Copy `.env.example` to `.env` and set the local values:
 
 ```env
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/staffingnation_spark"
-REDIS_URL="redis://localhost:6379"
-NEXTAUTH_URL="http://localhost:3000"
-AUTH_SECRET="replace-with-a-local-secret"
 SPARK_API_KEY="replace-with-a-shared-publish-secret"
 SPARK_PUBLIC_JOBS_BASE_URL="https://tcwtable.com/jobs"
+OPENAI_API_KEY=""
 ```
 
 If you already have a local database from the earlier prototype, keep your
@@ -115,10 +112,9 @@ existing `.env` value until you intentionally migrate or recreate the database.
 - TypeScript
 - Prisma
 - PostgreSQL
-- Redis
-- NextAuth
 - Tailwind CSS
 
 Planned integrations include Courier for communications, Cloudflare for public
 delivery and security controls, Supabase for Staffing Studio functions, and
-mobile-ready camera/microphone capture for Spark interviews.
+mobile-ready camera/microphone capture for Spark interviews. Recruiter access
+can be hardened with Cloudflare Access or Supabase Auth in the next slice.
