@@ -92,6 +92,15 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
+function formatEventDate(value?: string) {
+  if (!value) return "";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return formatDate(value);
+}
+
 function summaryPreview(value: unknown) {
   const summary = jsonObject(value);
   const text =
@@ -225,127 +234,168 @@ export default async function SparkRecruiterPage() {
               return (
                 <article
                   key={application.id}
-                  className="sn-card grid gap-5 p-5 lg:grid-cols-[1fr_360px]"
+                  className="sn-card overflow-hidden"
                 >
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-3">
+                  <div className="border-b border-[var(--sn-line)] bg-white p-5">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <SparkInitials label={candidateName} />
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge className={`border ${statusClass(application.status)}`}>
-                            {formatStatus(application.status)}
-                          </Badge>
-                          <span className="text-xs text-[var(--sn-muted)]">
-                            Updated {formatDate(application.updatedAt)}
-                          </span>
-                        </div>
-                        <h2 className="mt-2 text-2xl font-extrabold text-[var(--sn-ink)]">
+                      <div className="min-w-0 flex-1">
+                        <h2 className="text-2xl font-extrabold text-[var(--sn-ink)]">
                           {candidateName}
                         </h2>
+                        <div className="mt-2 flex flex-wrap gap-2 text-sm">
+                          {application.candidateEmail && (
+                            <span className="sn-chip">{application.candidateEmail}</span>
+                          )}
+                          {application.candidatePhone && (
+                            <span className="sn-chip">{application.candidatePhone}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                        <Badge className={`border ${statusClass(application.status)}`}>
+                          {formatStatus(application.status)}
+                        </Badge>
+                        <span className="text-xs text-[var(--sn-muted)]">
+                          Updated {formatDate(application.updatedAt)}
+                        </span>
                       </div>
                     </div>
-
-                    <div className="mt-4 flex flex-wrap gap-2 text-sm">
-                      {application.candidateEmail && (
-                        <span className="sn-chip">{application.candidateEmail}</span>
-                      )}
-                      {application.candidatePhone && (
-                        <span className="sn-chip">{application.candidatePhone}</span>
-                      )}
-                      <span className={needsLocationReview ? "sn-chip sn-chip-coral" : "sn-chip sn-chip-success"}>
-                        <MapPin className="h-3.5 w-3.5" />
-                        {location}
-                      </span>
-                    </div>
-
-                    <div className="mt-4 grid gap-4 md:grid-cols-[1fr_280px]">
-                      <section className="rounded-lg border border-[var(--sn-line)] bg-[var(--sn-sunken)] p-4">
-                        <div className="text-sm font-extrabold text-[var(--sn-ink)]">
-                          {application.posting.title}
-                        </div>
-                        <div className="mt-1 text-sm text-[var(--sn-muted)]">
-                          {application.posting.clientName || "Spark client"}
-                        </div>
-                        <Link
-                          href={`/jobs/${application.posting.slug}`}
-                          className="mt-3 inline-flex items-center gap-1 text-sm font-bold text-[var(--sn-blue-700)] hover:text-[var(--sn-blue)]"
-                        >
-                          View public posting
-                          <ArrowRight className="h-3.5 w-3.5" />
-                        </Link>
-                      </section>
-
-                      <section className="rounded-lg border border-[var(--sn-line)] bg-white p-4">
-                        <div className="flex items-center gap-2 text-sm font-extrabold text-[var(--sn-ink)]">
-                          <Sparkles className="h-4 w-4 text-[var(--sn-coral)]" />
-                          AI summary
-                        </div>
-                        <p className="mt-2 line-clamp-4 text-sm leading-6 text-[var(--sn-muted)]">
-                          {summaryPreview(application.aiSummary)}
-                        </p>
-                      </section>
-                    </div>
-
-                    <div className="mt-4">
-                      <div className="mb-2 flex items-center gap-2 text-sm font-extrabold text-[var(--sn-ink)]">
-                        <MessageSquareText className="h-4 w-4 text-[var(--sn-blue)]" />
-                        Communication events
-                      </div>
-                      {events.length === 0 ? (
-                        <p className="text-sm text-[var(--sn-muted)]">
-                          No communication events recorded yet.
-                        </p>
-                      ) : (
-                        <div className="grid gap-2">
-                          {events.map((event, index) => (
-                            <div
-                              key={`${event.type}-${event.at}-${index}`}
-                              className="rounded-lg border border-[var(--sn-line)] bg-white p-3 text-sm"
-                            >
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="font-bold text-[var(--sn-ink)]">
-                                  {event.label || event.type || "Event"}
-                                </span>
-                                {event.channel && (
-                                  <span className="sn-chip py-1 text-xs">
-                                    {event.channel}
-                                  </span>
-                                )}
-                              </div>
-                              {event.messagePreview && (
-                                <p className="mt-1 text-[var(--sn-muted)]">
-                                  {event.messagePreview}
-                                </p>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    {needsLocationReview && (
-                      <div className="mt-4 flex items-center gap-2 rounded-lg border border-[var(--sn-coral-100)] bg-[var(--sn-coral-50)] p-3 text-sm text-[var(--sn-coral-600)]">
-                        <ShieldAlert className="h-4 w-4" />
-                        Location signal needs recruiter review before interview.
-                      </div>
-                    )}
                   </div>
 
-                  <aside className="rounded-lg border border-[var(--sn-line)] bg-[var(--sn-sunken)] p-4">
-                    <h3 className="text-base font-extrabold text-[var(--sn-ink)]">
-                      Recruiter actions
-                    </h3>
-                    <p className="mt-2 text-sm leading-6 text-[var(--sn-muted)]">
-                      Update Spark status, save notes, and prepare communication
-                      events. Courier delivery hooks can attach here next.
-                    </p>
-                    <div className="mt-4">
-                      <SparkRecruiterActions
-                        applicationId={application.id}
-                        initialNotes={application.recruiterNotes || ""}
-                      />
+                  <div className="grid gap-5 bg-[var(--sn-soft)] p-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+                    <div className="min-w-0">
+                      <div className="grid gap-4 lg:grid-cols-3">
+                        <section className="rounded-lg border border-[var(--sn-line)] bg-white p-4">
+                          <div className="text-xs font-extrabold uppercase text-[var(--sn-muted)]">
+                            Role
+                          </div>
+                          <div className="mt-2 text-sm font-extrabold text-[var(--sn-ink)]">
+                            {application.posting.title}
+                          </div>
+                          <div className="mt-1 text-sm text-[var(--sn-muted)]">
+                            {application.posting.clientName || "Spark client"}
+                          </div>
+                          <Link
+                            href={`/jobs/${application.posting.slug}`}
+                            className="mt-3 inline-flex items-center gap-1 text-sm font-bold text-[var(--sn-blue-700)] hover:text-[var(--sn-blue)]"
+                          >
+                            View public posting
+                            <ArrowRight className="h-3.5 w-3.5" />
+                          </Link>
+                        </section>
+
+                        <section className="rounded-lg border border-[var(--sn-line)] bg-white p-4">
+                          <div className="flex items-center gap-2 text-xs font-extrabold uppercase text-[var(--sn-muted)]">
+                            <Sparkles className="h-4 w-4 text-[var(--sn-coral)]" />
+                            AI summary
+                          </div>
+                          <p className="mt-2 line-clamp-5 text-sm leading-6 text-[var(--sn-muted)]">
+                            {summaryPreview(application.aiSummary)}
+                          </p>
+                        </section>
+
+                        <section
+                          className={
+                            needsLocationReview
+                              ? "rounded-lg border border-[var(--sn-coral-100)] bg-[var(--sn-coral-50)] p-4"
+                              : "rounded-lg border border-[#bde8ce] bg-[var(--sn-success-50)] p-4"
+                          }
+                        >
+                          <div className="flex items-center gap-2 text-xs font-extrabold uppercase text-[var(--sn-muted)]">
+                            {needsLocationReview ? (
+                              <ShieldAlert className="h-4 w-4 text-[var(--sn-coral-600)]" />
+                            ) : (
+                              <MapPin className="h-4 w-4 text-[var(--sn-success)]" />
+                            )}
+                            Location signal
+                          </div>
+                          <p
+                            className={
+                              needsLocationReview
+                                ? "mt-2 text-sm font-bold leading-6 text-[var(--sn-coral-600)]"
+                                : "mt-2 text-sm font-bold leading-6 text-[var(--sn-success)]"
+                            }
+                          >
+                            {location}
+                          </p>
+                          {needsLocationReview && (
+                            <p className="mt-2 text-xs leading-5 text-[var(--sn-coral-600)]">
+                              Review before sending an interview link.
+                            </p>
+                          )}
+                        </section>
+                      </div>
+
+                      <section className="mt-4 rounded-lg border border-[var(--sn-line)] bg-white p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div className="flex items-center gap-2 text-sm font-extrabold text-[var(--sn-ink)]">
+                            <MessageSquareText className="h-4 w-4 text-[var(--sn-blue)]" />
+                            Communication log
+                          </div>
+                          <span className="sn-chip py-1 text-xs">
+                            {events.length} {events.length === 1 ? "event" : "events"}
+                          </span>
+                        </div>
+
+                        {events.length === 0 ? (
+                          <p className="mt-3 text-sm text-[var(--sn-muted)]">
+                            No communication events recorded yet.
+                          </p>
+                        ) : (
+                          <ol className="mt-3 divide-y divide-[var(--sn-line)]">
+                            {events.map((event, index) => {
+                              const eventDate = formatEventDate(event.at);
+
+                              return (
+                                <li
+                                  key={`${event.type}-${event.at}-${index}`}
+                                  className="grid gap-1 py-3 first:pt-0 last:pb-0"
+                                >
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="font-bold text-[var(--sn-ink)]">
+                                      {event.label || event.type || "Event"}
+                                    </span>
+                                    {event.channel && (
+                                      <span className="sn-chip py-1 text-xs">
+                                        {event.channel}
+                                      </span>
+                                    )}
+                                    {eventDate && (
+                                      <span className="text-xs text-[var(--sn-muted)]">
+                                        {eventDate}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {event.messagePreview && (
+                                    <p className="text-sm leading-6 text-[var(--sn-muted)]">
+                                      {event.messagePreview}
+                                    </p>
+                                  )}
+                                </li>
+                              );
+                            })}
+                          </ol>
+                        )}
+                      </section>
                     </div>
-                  </aside>
+
+                    <aside className="rounded-lg border border-[var(--sn-line)] bg-white p-4">
+                      <h3 className="text-base font-extrabold text-[var(--sn-ink)]">
+                        Recruiter actions
+                      </h3>
+                      <p className="mt-2 text-sm leading-6 text-[var(--sn-muted)]">
+                        Save notes, update status, and prepare the next candidate
+                        communication.
+                      </p>
+                      <div className="mt-4">
+                        <SparkRecruiterActions
+                          applicationId={application.id}
+                          initialNotes={application.recruiterNotes || ""}
+                        />
+                      </div>
+                    </aside>
+                  </div>
                 </article>
               );
             })}
