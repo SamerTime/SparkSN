@@ -65,7 +65,7 @@ function buildInterviewInviteContent(input: SparkInterviewInviteInput) {
   const clientLine = cleanText(input.clientName)
     ? ` for ${cleanText(input.clientName)}`
     : "";
-  const subject = `Spark interview invitation for ${input.jobTitle}`;
+  const subject = "Spark interview invite";
   const text = [
     `Hi ${candidateName},`,
     "",
@@ -152,15 +152,28 @@ export async function sendSparkInterviewInvite(
             email: {
               override: {
                 from: config.from,
-                Subject: content.subject,
-                HtmlBody: content.html,
-                TextBody: content.text,
-                TrackOpens: false,
-                TrackLinks: "None",
-                ...(config.stream ? { MessageStream: config.stream } : {}),
+                subject: content.subject,
+                html: content.html,
+                text: content.text,
+                tracking: {
+                  open: false,
+                },
               },
             },
           },
+          ...(config.stream
+            ? {
+                providers: {
+                  postmark: {
+                    override: {
+                      config: {
+                        MessageStream: config.stream,
+                      },
+                    },
+                  },
+                },
+              }
+            : {}),
           routing: {
             method: "single",
             channels: ["email"],
