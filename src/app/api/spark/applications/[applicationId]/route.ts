@@ -4,6 +4,8 @@ import {
   deleteApplicationSubmission,
   getApplicationForDeletion,
   getApplicationForRecruiterAction,
+  getApprovedQuestionBankForPosting,
+  interviewQuestionsFromBank,
   type JsonValue,
   type SparkApplicationStatus,
   updateApplication,
@@ -244,12 +246,24 @@ export async function PATCH(
       const token = interviewToken();
       const interviewUrl = publicInterviewUrl(request, token);
       const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+      // Snapshot the approved question bank onto the session so the candidate
+      // sees the recruiter-approved (Roger-generated) questions, locked at
+      // invite time even if the bank is later edited/retired.
+      const approvedBank = await getApprovedQuestionBankForPosting(
+        application.postingId
+      );
+      const snapshotQuestions = interviewQuestionsFromBank(approvedBank);
+
       const session = {
         token,
         status: "invited",
         inviteUrl: interviewUrl,
         invitedAt: now,
         expiresAt,
+        questionBankId: approvedBank?.id ?? null,
+        questionBankApprovedAt: approvedBank?.approvedAt ?? null,
+        questions: snapshotQuestions,
       };
 
       delivery = await sendSparkInterviewInvite({

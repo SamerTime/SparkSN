@@ -1,7 +1,11 @@
 import { notFound } from "next/navigation";
 import { SparkLogoMark } from "@/components/spark/SparkBrand";
 import { SparkInterviewSession } from "@/components/spark/SparkInterviewSession";
-import { getApplicationByInterviewToken } from "@/lib/spark-db";
+import {
+  getApplicationByInterviewToken,
+  getApprovedQuestionBankForPosting,
+  interviewQuestionsFromBank,
+} from "@/lib/spark-db";
 
 export const dynamic = "force-dynamic";
 
@@ -63,10 +67,37 @@ export default async function InterviewPage({
   }
 
   const status = interviewStatus(application.interviewMedia, application.status);
-  const questions = buildQuestions(
-    application.posting.title,
-    application.posting.clientName
+
+  // Prefer the questions snapshotted onto the interview session at invite time
+  // (the recruiter-approved, Roger-generated bank). Fall back to the live
+  // approved bank for older invites, then to a generic set as a last resort so
+  // the interview is never empty.
+  const sessionSnapshot = jsonObject(
+    jsonObject(application.interviewMedia).session
   );
+  let questions = (
+    Array.isArray(sessionSnapshot.questions) ? sessionSnapshot.questions : []
+  )
+    .map((entry) =>
+      entry && typeof entry === "object"
+        ? stringValue((entry as Record<string, unknown>).text)
+        : stringValue(entry)
+    )
+    .filter(Boolean);
+
+  if (questions.length === 0) {
+    const approvedBank = await getApprovedQuestionBankForPosting(
+      application.posting.id
+    );
+    questions = interviewQuestionsFromBank(approvedBank).map((q) => q.text);
+  }
+
+  if (questions.length === 0) {
+    questions = buildQuestions(
+      application.posting.title,
+      application.posting.clientName
+    );
+  }
 
   return (
     <main className="sn-page">
