@@ -526,6 +526,54 @@ export async function getQuestionBankForPosting(
   return data as unknown as SparkQuestionBank | null;
 }
 
+export type SparkInterviewSnapshotQuestion = {
+  id: string;
+  text: string;
+  target_seconds: number | null;
+};
+
+// Normalize an approved bank's questions JSON into the minimal shape the
+// candidate interview needs. Tolerant of missing fields, since the upstream
+// (Roger/MCP) output is not runtime-validated.
+export function interviewQuestionsFromBank(
+  bank: Pick<SparkQuestionBank, "questions"> | null
+): SparkInterviewSnapshotQuestion[] {
+  const raw =
+    bank && Array.isArray(bank.questions) ? (bank.questions as unknown[]) : [];
+  return raw
+    .map((entry) => {
+      const obj =
+        entry && typeof entry === "object"
+          ? (entry as Record<string, unknown>)
+          : {};
+      const text = typeof obj.text === "string" ? obj.text.trim() : "";
+      if (!text) return null;
+      return {
+        id: typeof obj.id === "string" ? obj.id : "",
+        text,
+        target_seconds:
+          typeof obj.target_seconds === "number" ? obj.target_seconds : null,
+      };
+    })
+    .filter((q): q is SparkInterviewSnapshotQuestion => q !== null);
+}
+
+export async function getApprovedQuestionBankForPosting(
+  postingId: string
+): Promise<SparkQuestionBank | null> {
+  const { data, error } = await getSparkSupabase()
+    .from("SparkQuestionBank")
+    .select("*")
+    .eq("postingId", postingId)
+    .eq("status", "Approved")
+    .order("approvedAt", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) fail(error, "Unable to load approved Spark question bank");
+  return data as unknown as SparkQuestionBank | null;
+}
+
 export async function retireQuestionBanksForPosting(
   postingId: string,
   statuses: SparkQuestionBankStatus[] = ["Draft"]
