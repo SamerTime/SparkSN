@@ -333,3 +333,212 @@ export async function buildSparkQuestionBankDraft(
     agentReview,
   };
 }
+
+// ---------------------------------------------------------------------------
+// KaizenIs MCP integration (Phase 1: generate_question_bank)
+// Spark's backend calls Roger's pipeline on KaizenIs and maps the structured
+// result into the same SparkQuestionBankDraft shape the local generator
+// produces, so persistence/approval logic stays unchanged.
+// ---------------------------------------------------------------------------
+
+export type SparkQuestionBankMcpResult = {
+  draft: SparkQuestionBankDraft;
+  mcpRunId: string | null;
+  modelName: string | null;
+};
+
+function requireMcpEnv(name: string): string {
+  const value = process.env[name]?.trim();
+  if (!value) {
+    throw new Error(
+      `Missing ${name}. Set it to call the KaizenIs generate_question_bank pipeline.`
+    );
+  }
+  return value;
+}
+
+function coerceStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
+
+// Roger returns content-only questions. We defensively normalize each one to
+// the DraftQuestion shape (the KaizenIs runtime does not validate model output).
+function normalizeMcpQuestion(
+  raw: unknown,
+  seedHash: string,
+  index: number
+): DraftQuestion {
+  const q = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const allowedTypes: QuestionType[] = [
+    "technical",
+    "behavioral",
+    "role_specific",
+    "availability",
+    "safety",
+  ];
+  const type = allowedTypes.includes(q.type as QuestionType)
+    ? (q.type as QuestionType)
+    : "role_specific";
+
+  const scoringRaw = (
+    q.scoring && typeof q.scoring === "object" ? q.scoring : {}
+  ) as Record<string, unknown>;
+  const anchorsRaw = (
+    scoringRaw.anchors && typeof scoringRaw.anchors === "object"
+      ? scoringRaw.anchors
+      : {}
+  ) as Record<string, unknown>;
+  const anchors: Record<string, string> = {};
+  for (const key of ["1", "3", "5"]) {
+    if (typeof anchorsRaw[key] === "string") anchors[key] = anchorsRaw[key] as string;
+  }
+
+  const targetSeconds = Number(q.target_seconds);
+  const maxScore = Number(scoringRaw.max_score);
+
+  return {
+    id:
+      typeof q.id === "string" && q.id.trim()
+        ? q.id
+        : `qb_${seedHash.slice(0, 8)}_${String(index + 1).padStart(2, "0")}`,
+    text: typeof q.text === "string" ? q.text : "",
+    type,
+    source: typeof q.source === "string" ? q.source : "jd",
+    target_seconds: Number.isFinite(targetSeconds) ? Math.round(targetSeconds) : 24,
+    editable: q.editable !== false,
+    rubric: coerceStringArray(q.rubric),
+    ideal_evidence: coerceStringArray(q.ideal_evidence),
+    red_flags: coerceStringArray(q.red_flags),
+    // Phase 1: Roger does not yet emit protected_class_risk; default to "low".
+    // Phase 2 (bias/PII watchdog agent) will populate "review" where warranted.
+    protected_class_risk: q.protected_class_risk === "review" ? "review" : "low",
+    scoring: {
+      max_score: Number.isFinite(maxScore) ? Math.round(maxScore) : 5,
+      anchors:
+        Object.keys(anchors).length > 0
+          ? anchors
+          : {
+              "1": "Answer is vague, unsupported, or unrelated to the job requirement.",
+              "3": "Answer gives relevant experience but limited detail on actions or outcomes.",
+              "5": "Answer gives specific job-relevant actions, outcomes, constraints, and reflection.",
+            },
+    },
+  };
+}
+
+export async function fetchSparkQuestionBankDraftFromMcp(
+  posting: SparkJobPosting,
+  requestedTarget?: unknown
+): Promise<SparkQuestionBankMcpResult> {
+  const baseUrl = requireMcpEnv("DASHBOARD47_MCP_URL").replace(/\/+$/, "");
+  const apiKey = requireMcpEnv("DASHBOARD47_MCP_API_KEY");
+
+  const snapshot = sourceSnapshot(posting);
+  const seedHash = await sha256Hex(JSON.stringify(snapshot));
+  const questionCountTarget = normalizeTarget(
+    requestedTarget || rawPayloadQuestionTarget(posting)
+  );
+
+  const input = {
+    posting_id: posting.id,
+    job_order_id: posting.sourceEntityId,
+    title: posting.title,
+    client_name: posting.clientName,
+    overview: posting.overview,
+    responsibilities: posting.responsibilities,
+    requirements: posting.requirements,
+    qualifications: posting.qualifications,
+    skills: posting.skills ?? [],
+    certifications: posting.certifications ?? [],
+    question_count_target: questionCountTarget,
+    source_hash: seedHash,
+    prompt_version: SPARK_QUESTION_BANK_PROMPT_VERSION,
+  };
+
+  const response = await fetch(
+    `${baseUrl}/api/v1/pipelines/generate_question_bank/invoke`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({ input }),
+    }
+  );
+
+  const payload = (await response.json().catch(() => null)) as {
+    ok?: boolean;
+    run_id?: string;
+    status?: string;
+    output?: { type?: string; name?: string; input?: Record<string, unknown> };
+    error_code?: string;
+    error_message?: string;
+  } | null;
+
+  // Fail loud: never silently fall back to the local deterministic generator.
+  if (!response.ok || !payload?.ok || payload.status !== "succeeded") {
+    const detail =
+      payload?.error_message ||
+      payload?.error_code ||
+      payload?.status ||
+      `HTTP ${response.status}`;
+    throw new Error(`KaizenIs generate_question_bank failed: ${detail}`);
+  }
+
+  if (payload.output?.type !== "tool_use" || !payload.output.input) {
+    throw new Error(
+      "KaizenIs returned an unexpected output shape (expected a tool_use result)."
+    );
+  }
+
+  const toolInput = payload.output.input;
+  const rawQuestions = Array.isArray(toolInput.questions)
+    ? toolInput.questions
+    : [];
+  if (rawQuestions.length === 0) {
+    throw new Error("KaizenIs returned no questions for this job order.");
+  }
+
+  const questions = rawQuestions.map((raw, index) =>
+    normalizeMcpQuestion(raw, seedHash, index)
+  );
+
+  const agentReview: JsonValue = {
+    mode: "mcp_roger_question_bank_v1",
+    mcpServerSlug: SPARK_QUESTION_BANK_MCP_SERVER_SLUG,
+    mcpToolName: SPARK_QUESTION_BANK_MCP_TOOL_NAME,
+    mcpRunId: payload.run_id ?? null,
+    promptVersion: SPARK_QUESTION_BANK_PROMPT_VERSION,
+    safetyProfile: SPARK_QUESTION_BANK_SAFETY_PROFILE,
+    coverage: (toolInput.coverage as JsonValue) ?? null,
+    recommendation:
+      typeof toolInput.recommendation === "string"
+        ? toolInput.recommendation
+        : null,
+    guardrails: [
+      "Same approved question bank for every applicant to this posting.",
+      "No per-candidate personalization in v1.",
+      "Questions generated from job-order fields by Roger (KaizenIs).",
+      "Scoring is advisory and recruiter-owned.",
+    ],
+    watchdogFlags: [
+      "Recruiter approval required before use.",
+      "protected_class_risk defaults to low until the bias/PII watchdog agent ships (phase 2).",
+    ],
+  };
+
+  return {
+    draft: {
+      jdSourceHash: seedHash,
+      questionCountTarget,
+      questions,
+      sourceSnapshot: snapshot as JsonValue,
+      agentReview,
+    },
+    mcpRunId: payload.run_id ?? null,
+    modelName: "roger:question-bank-v1.0",
+  };
+}
