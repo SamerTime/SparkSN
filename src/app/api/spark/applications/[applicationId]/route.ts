@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   getApplicationForRecruiterAction,
   type JsonValue,
+  type SparkApplicationStatus,
   updateApplication,
 } from "@/lib/spark-db";
 import {
@@ -10,7 +11,7 @@ import {
 } from "@/lib/spark-notifications";
 
 type ActionConfig = {
-  status?: "RecruiterApproved" | "InterviewInvited" | "Declined" | "RecruiterReview";
+  status?: SparkApplicationStatus;
   eventType: string;
   label: string;
   messagePreview: string;
@@ -54,6 +55,65 @@ const ACTIONS: Record<string, ActionConfig> = {
     label: "Recruiter notes saved",
     channel: "internal",
     messagePreview: "Recruiter notes updated.",
+  },
+};
+
+const WORKFLOW_STATUSES: Record<string, ActionConfig> = {
+  Invited: {
+    status: "Invited",
+    eventType: "candidate_invited",
+    label: "Candidate invited",
+    channel: "internal",
+    messagePreview:
+      "Candidate moved to Invited for this Spark job order.",
+  },
+  InProcess: {
+    status: "InProcess",
+    eventType: "candidate_in_process",
+    label: "Candidate in process",
+    channel: "internal",
+    messagePreview:
+      "Candidate moved to In Process for active recruiter follow-up.",
+  },
+  Complete: {
+    status: "Complete",
+    eventType: "candidate_complete",
+    label: "Candidate complete",
+    channel: "internal",
+    messagePreview:
+      "Candidate moved to Complete for this Spark review stage.",
+  },
+  Reviewing: {
+    status: "Reviewing",
+    eventType: "candidate_reviewing",
+    label: "Candidate reviewing",
+    channel: "internal",
+    messagePreview:
+      "Candidate moved to Reviewing for recruiter evaluation.",
+  },
+  Shortlisted: {
+    status: "Shortlisted",
+    eventType: "candidate_shortlisted",
+    label: "Candidate shortlisted",
+    channel: "internal",
+    messagePreview:
+      "Candidate moved to Shortlist for recruiter consideration.",
+  },
+  Declined: {
+    status: "Declined",
+    eventType: "candidate_rejected",
+    label: "Candidate rejected",
+    channel: "internal",
+    messagePreview:
+      "Candidate moved to Reject for this Spark job order.",
+  },
+  Offer: {
+    status: "Offer",
+    eventType: "candidate_offer",
+    label: "Candidate offer",
+    channel: "internal",
+    messagePreview:
+      "Candidate moved to Offer for this Spark job order.",
   },
 };
 
@@ -139,11 +199,15 @@ export async function PATCH(
     const body = await request.json();
     const action = stringValue(body.action);
     const recruiterNotes = stringValue(body.recruiterNotes);
-    const config = ACTIONS[action];
+    const requestedStatus = stringValue(body.status);
+    const config =
+      action === "set_status"
+        ? WORKFLOW_STATUSES[requestedStatus]
+        : ACTIONS[action];
 
     if (!config) {
       return NextResponse.json(
-        { success: false, error: "Unknown recruiter action." },
+        { success: false, error: "Unknown recruiter action or status." },
         { status: 400 }
       );
     }

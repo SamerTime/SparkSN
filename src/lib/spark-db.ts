@@ -13,12 +13,18 @@ export type SparkPostingStatus = "Published" | "Archived" | "Closed";
 export type SparkApplicationStatus =
   | "ProfileStarted"
   | "Applied"
+  | "Invited"
   | "RecruiterApproved"
   | "InterviewInvited"
+  | "InProcess"
   | "InterviewStarted"
+  | "Complete"
   | "InterviewCompleted"
   | "RecruiterReview"
+  | "Reviewing"
   | "Vetted"
+  | "Shortlisted"
+  | "Offer"
   | "Declined";
 
 export type SparkJobPosting = {

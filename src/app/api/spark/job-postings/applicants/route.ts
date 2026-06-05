@@ -98,10 +98,14 @@ function aiSummaryExcerpt(aiSummary: JsonValue) {
 }
 
 function recruiterDecision(status: SparkApplicationStatus) {
-  if (status === "Vetted") return "vetted";
+  if (status === "Offer") return "offer";
+  if (status === "Shortlisted" || status === "Vetted") return "shortlisted";
   if (status === "Declined") return "declined";
+  if (status === "Complete" || status === "InterviewCompleted") return "complete";
+  if (status === "Reviewing" || status === "RecruiterReview") return "reviewing";
+  if (status === "InProcess" || status === "InterviewStarted") return "in_process";
+  if (status === "Invited" || status === "InterviewInvited") return "invited";
   if (status === "RecruiterApproved") return "approved";
-  if (status === "RecruiterReview") return "review";
   return null;
 }
 

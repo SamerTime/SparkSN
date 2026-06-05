@@ -1,15 +1,18 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
   BriefcaseBusiness,
   CalendarClock,
   ClipboardList,
+  Loader2,
   Mail,
   MapPin,
   MessageSquareText,
+  MoreVertical,
   PanelRightOpen,
   Phone,
   ShieldAlert,
@@ -18,6 +21,7 @@ import {
   Video,
   X,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SparkInitials } from "@/components/spark/SparkBrand";
@@ -58,6 +62,51 @@ type SparkRecruiterWorkspaceProps = {
   jobs: SparkPublishedJobListItem[];
   initialApplicationId?: string | null;
 };
+
+type WorkflowStatusOption = {
+  label: string;
+  status?: string;
+  action?: string;
+  tone: "default" | "primary" | "success" | "warning" | "danger";
+};
+
+const WORKFLOW_STATUS_OPTIONS: WorkflowStatusOption[] = [
+  {
+    label: "Invited",
+    action: "invite_interview",
+    tone: "primary",
+  },
+  {
+    label: "In Process",
+    status: "InProcess",
+    tone: "primary",
+  },
+  {
+    label: "Complete",
+    status: "Complete",
+    tone: "success",
+  },
+  {
+    label: "Reviewing",
+    status: "Reviewing",
+    tone: "warning",
+  },
+  {
+    label: "Shortlist",
+    status: "Shortlisted",
+    tone: "success",
+  },
+  {
+    label: "Reject",
+    status: "Declined",
+    tone: "danger",
+  },
+  {
+    label: "Offer",
+    status: "Offer",
+    tone: "success",
+  },
+];
 
 type JobOrderView = {
   id: string;
@@ -150,28 +199,49 @@ function statusClass(status: string) {
   if (status === "Applied") {
     return "border-[var(--sn-blue-200)] bg-[var(--sn-blue-50)] text-[var(--sn-blue-700)]";
   }
-  if (status === "RecruiterApproved") {
-    return "border-[var(--sn-success)] bg-[var(--sn-success-50)] text-[var(--sn-success)]";
-  }
-  if (status === "InterviewInvited") {
+  if (status === "Invited" || status === "InterviewInvited") {
     return "border-[var(--sn-coral-100)] bg-[var(--sn-coral-50)] text-[var(--sn-coral-600)]";
   }
-  if (status === "InterviewStarted") {
+  if (status === "InProcess" || status === "InterviewStarted") {
     return "border-[var(--sn-blue-200)] bg-[var(--sn-blue-50)] text-[var(--sn-blue-700)]";
   }
-  if (status === "InterviewCompleted") {
+  if (
+    status === "Complete" ||
+    status === "InterviewCompleted" ||
+    status === "RecruiterApproved" ||
+    status === "Shortlisted" ||
+    status === "Vetted" ||
+    status === "Offer"
+  ) {
     return "border-[var(--sn-success)] bg-[var(--sn-success-50)] text-[var(--sn-success)]";
   }
   if (status === "Declined") {
     return "border-[var(--sn-danger)] bg-[var(--sn-danger-50)] text-[var(--sn-danger)]";
   }
-  if (status === "Vetted") {
-    return "border-[var(--sn-success)] bg-[var(--sn-success-50)] text-[var(--sn-success)]";
+  if (status === "Reviewing" || status === "RecruiterReview") {
+    return "border-[var(--sn-coral-100)] bg-[var(--sn-coral-50)] text-[var(--sn-coral-600)]";
   }
   return "border-[var(--sn-line)] bg-white text-[var(--sn-ink-2)]";
 }
 
 function formatStatus(status: string) {
+  const labels: Record<string, string> = {
+    ProfileStarted: "Profile Started",
+    RecruiterApproved: "Approved",
+    InterviewInvited: "Invited",
+    InProcess: "In Process",
+    InterviewStarted: "In Process",
+    Complete: "Complete",
+    InterviewCompleted: "Complete",
+    RecruiterReview: "Reviewing",
+    Reviewing: "Reviewing",
+    Vetted: "Shortlist",
+    Shortlisted: "Shortlist",
+    Declined: "Reject",
+    Offer: "Offer",
+  };
+
+  if (labels[status]) return labels[status];
   return status.replace(/([a-z])([A-Z])/g, "$1 $2");
 }
 
@@ -239,9 +309,12 @@ function candidateLocation(application: SparkRecruiterApplicationView) {
 }
 
 function interviewLabel(application: SparkRecruiterApplicationView) {
-  if (application.status === "InterviewCompleted") return "Interview complete";
-  if (application.status === "InterviewStarted") return "Interview started";
-  if (application.status === "InterviewInvited") return "Invite sent";
+  if (application.status === "Complete" || application.status === "InterviewCompleted") return "Complete";
+  if (application.status === "InProcess" || application.status === "InterviewStarted") return "In process";
+  if (application.status === "Invited" || application.status === "InterviewInvited") return "Invited";
+  if (application.status === "Reviewing" || application.status === "RecruiterReview") return "Reviewing";
+  if (application.status === "Shortlisted" || application.status === "Vetted") return "Shortlist";
+  if (application.status === "Offer") return "Offer";
   if (application.status === "RecruiterApproved") return "Approved";
   if (application.status === "Declined") return "Declined";
   return "Needs review";
@@ -283,8 +356,12 @@ function buildJobOrders(
     const job = jobMap.get(application.postingId);
     if (!job) return;
     job.applicantCount += 1;
-    if (application.status === "Applied") job.needsReviewCount += 1;
-    if (application.status === "InterviewCompleted") job.completedCount += 1;
+    if (application.status === "Applied" || application.status === "Reviewing" || application.status === "RecruiterReview") {
+      job.needsReviewCount += 1;
+    }
+    if (application.status === "Complete" || application.status === "InterviewCompleted") {
+      job.completedCount += 1;
+    }
   });
 
   return [...jobMap.values()].sort((first, second) => {
@@ -300,6 +377,7 @@ export function SparkRecruiterWorkspace({
   jobs,
   initialApplicationId,
 }: SparkRecruiterWorkspaceProps) {
+  const router = useRouter();
   const jobOrders = useMemo(
     () => buildJobOrders(jobs, applications),
     [applications, jobs]
@@ -313,6 +391,10 @@ export function SparkRecruiterWorkspace({
   const [activeApplicationId, setActiveApplicationId] = useState<string | null>(
     initialApplication?.id || null
   );
+  const [openMenuApplicationId, setOpenMenuApplicationId] = useState<string | null>(
+    null
+  );
+  const [loadingWorkflowId, setLoadingWorkflowId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!selectedPostingId && jobOrders[0]) {
@@ -341,6 +423,43 @@ export function SparkRecruiterWorkspace({
     const url = new URL(window.location.href);
     url.searchParams.delete("application");
     window.history.replaceState(null, "", url.toString());
+  };
+
+  const runWorkflowAction = async (
+    application: SparkRecruiterApplicationView,
+    option: WorkflowStatusOption
+  ) => {
+    const workflowId = `${application.id}:${option.status || option.action}`;
+    setLoadingWorkflowId(workflowId);
+
+    try {
+      const response = await fetch(`/api/spark/applications/${application.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: option.action || "set_status",
+          status: option.status,
+          recruiterNotes: application.recruiterNotes || "",
+        }),
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || "Unable to update candidate status.");
+      }
+
+      toast.success(`${option.label} recorded.`);
+      setOpenMenuApplicationId(null);
+      router.refresh();
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to update candidate status."
+      );
+    } finally {
+      setLoadingWorkflowId(null);
+    }
   };
 
   if (!jobOrders.length) {
@@ -472,13 +591,16 @@ export function SparkRecruiterWorkspace({
                   const eventDate = formatEventDate(latestEvent?.at);
 
                   return (
-                    <button
+                    <div
                       key={application.id}
-                      type="button"
-                      onClick={() => openApplication(application.id)}
-                      className="block w-full bg-white p-4 text-left transition hover:bg-[var(--sn-soft)]"
+                      className="relative bg-white transition hover:bg-[var(--sn-soft)]"
                     >
-                      <div className="grid gap-4 xl:grid-cols-[minmax(220px,1.2fr)_minmax(260px,1.5fr)_minmax(210px,0.9fr)]">
+                      <button
+                        type="button"
+                        onClick={() => openApplication(application.id)}
+                        className="block w-full p-4 pr-16 text-left"
+                      >
+                        <div className="grid gap-4 xl:grid-cols-[minmax(220px,1.2fr)_minmax(260px,1.5fr)_minmax(210px,0.9fr)]">
                         <div className="flex min-w-0 gap-3">
                           <SparkInitials label={name} />
                           <div className="min-w-0">
@@ -570,7 +692,19 @@ export function SparkRecruiterWorkspace({
                           </div>
                         </div>
                       </div>
-                    </button>
+                      </button>
+                      <WorkflowStatusMenu
+                        application={application}
+                        isOpen={openMenuApplicationId === application.id}
+                        loadingWorkflowId={loadingWorkflowId}
+                        onToggle={() =>
+                          setOpenMenuApplicationId((current) =>
+                            current === application.id ? null : application.id
+                          )
+                        }
+                        onRun={(option) => runWorkflowAction(application, option)}
+                      />
+                    </div>
                   );
                 })}
               </div>
@@ -586,6 +720,118 @@ export function SparkRecruiterWorkspace({
         />
       )}
     </>
+  );
+}
+
+function workflowOptionActive(status: string, option: WorkflowStatusOption) {
+  if (option.action === "invite_interview") {
+    return status === "Invited" || status === "InterviewInvited";
+  }
+
+  if (option.status === "InProcess") {
+    return status === "InProcess" || status === "InterviewStarted";
+  }
+
+  if (option.status === "Complete") {
+    return status === "Complete" || status === "InterviewCompleted";
+  }
+
+  if (option.status === "Reviewing") {
+    return status === "Reviewing" || status === "RecruiterReview";
+  }
+
+  if (option.status === "Shortlisted") {
+    return status === "Shortlisted" || status === "Vetted";
+  }
+
+  return status === option.status;
+}
+
+function workflowToneClass(option: WorkflowStatusOption, active: boolean) {
+  if (active) {
+    if (option.tone === "danger") {
+      return "bg-[var(--sn-danger-50)] text-[var(--sn-danger)]";
+    }
+    if (option.tone === "success") {
+      return "bg-[var(--sn-success-50)] text-[var(--sn-success)]";
+    }
+    if (option.tone === "warning") {
+      return "bg-[var(--sn-coral-50)] text-[var(--sn-coral-600)]";
+    }
+    return "bg-[var(--sn-blue-50)] text-[var(--sn-blue-700)]";
+  }
+
+  if (option.tone === "danger") {
+    return "text-[var(--sn-danger)] hover:bg-[var(--sn-danger-50)]";
+  }
+
+  return "text-[var(--sn-ink)] hover:bg-[var(--sn-soft)]";
+}
+
+function WorkflowStatusMenu({
+  application,
+  isOpen,
+  loadingWorkflowId,
+  onToggle,
+  onRun,
+}: {
+  application: SparkRecruiterApplicationView;
+  isOpen: boolean;
+  loadingWorkflowId: string | null;
+  onToggle: () => void;
+  onRun: (option: WorkflowStatusOption) => void;
+}) {
+  return (
+    <div className="absolute right-4 top-4 z-20">
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        className="h-9 w-9 border-[var(--sn-line)] bg-white"
+        onClick={(event) => {
+          event.stopPropagation();
+          onToggle();
+        }}
+        title="Candidate status menu"
+      >
+        <MoreVertical className="h-4 w-4" />
+      </Button>
+
+      {isOpen && (
+        <div
+          className="absolute right-0 top-11 w-48 rounded-lg border border-[var(--sn-line)] bg-white p-1 shadow-lg"
+          onClick={(event) => event.stopPropagation()}
+        >
+          {WORKFLOW_STATUS_OPTIONS.map((option) => {
+            const active = workflowOptionActive(application.status, option);
+            const workflowId = `${application.id}:${option.status || option.action}`;
+            const loading = loadingWorkflowId === workflowId;
+
+            return (
+              <button
+                key={option.label}
+                type="button"
+                className={`flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm font-bold ${workflowToneClass(
+                  option,
+                  active
+                )}`}
+                disabled={Boolean(loadingWorkflowId) || active}
+                onClick={() => {
+                  if (!active) onRun(option);
+                }}
+              >
+                <span>{option.label}</span>
+                {loading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : active ? (
+                  <span className="h-2 w-2 rounded-full bg-current" />
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
