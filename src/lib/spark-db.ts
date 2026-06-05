@@ -605,6 +605,24 @@ export async function getApprovedQuestionBankForPosting(
   return data as unknown as SparkQuestionBank | null;
 }
 
+export type SparkAnalysisApplication = Pick<
+  SparkApplication,
+  "id" | "status" | "postingId" | "candidateName" | "interviewTranscript" | "aiSummary"
+>;
+
+export async function getApplicationForAnalysis(
+  applicationId: string
+): Promise<SparkAnalysisApplication | null> {
+  const { data, error } = await getSparkSupabase()
+    .from("SparkApplication")
+    .select("id,status,postingId,candidateName,interviewTranscript,aiSummary")
+    .eq("id", applicationId)
+    .maybeSingle();
+
+  if (error) fail(error, "Unable to load Spark application for analysis");
+  return data as unknown as SparkAnalysisApplication | null;
+}
+
 export async function retireQuestionBanksForPosting(
   postingId: string,
   statuses: SparkQuestionBankStatus[] = ["Draft"]
