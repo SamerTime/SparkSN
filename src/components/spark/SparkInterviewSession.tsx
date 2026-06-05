@@ -21,7 +21,7 @@ type SparkInterviewSessionProps = {
   postingTitle: string;
   clientName?: string | null;
   initialStatus: string;
-  questions: string[];
+  questions: InterviewQuestion[];
 };
 
 type InterviewPhase = "ready" | "active" | "completed";
@@ -30,6 +30,24 @@ type CameraFacing = "user" | "environment";
 type Answer = {
   question: string;
   answer: string;
+  questionId?: string;
+  source?: string;
+  sourceLabel?: string;
+  type?: string;
+  targetSeconds?: number;
+  generatorLabel?: string;
+  mcpRunId?: string | null;
+};
+
+type InterviewQuestion = {
+  id: string;
+  text: string;
+  type: string;
+  source: string;
+  sourceLabel: string;
+  generatorLabel: string;
+  mcpRunId: string | null;
+  targetSeconds: number;
 };
 
 type RecordingCapture = {
@@ -169,7 +187,7 @@ export function SparkInterviewSession({
   });
 
   const currentQuestion = questions[questionIndex] || questions[0];
-  const progress = Math.round(((questionIndex + 1) / questions.length) * 100);
+  const currentQuestionText = currentQuestion?.text || "";
 
   useEffect(() => {
     return () => {
@@ -467,8 +485,15 @@ export function SparkInterviewSession({
 
     const nextAnswers = [...answers];
     nextAnswers[questionIndex] = {
-      question: currentQuestion,
+      question: currentQuestionText,
       answer,
+      questionId: currentQuestion?.id,
+      source: currentQuestion?.source,
+      sourceLabel: currentQuestion?.sourceLabel,
+      type: currentQuestion?.type,
+      targetSeconds: currentQuestion?.targetSeconds || 60,
+      generatorLabel: currentQuestion?.generatorLabel,
+      mcpRunId: currentQuestion?.mcpRunId,
     };
     setAnswers(nextAnswers);
     return nextAnswers;
@@ -673,27 +698,13 @@ export function SparkInterviewSession({
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-xs font-extrabold uppercase tracking-normal text-[var(--sn-blue-700)]">
-              Question {questionIndex + 1} of {questions.length}
+              Screening prompt
             </p>
             <h1 className="mt-1 text-lg font-extrabold text-[var(--sn-ink)]">
               {postingTitle}
             </h1>
           </div>
-          <span className="sn-chip sn-chip-coral">{progress}%</span>
-        </div>
-        <div className="mt-4 flex gap-1">
-          {questions.map((question, index) => (
-            <span
-              key={question}
-              className={
-                index < questionIndex
-                  ? "spark-stage-line is-done"
-                  : index === questionIndex
-                    ? "spark-stage-line is-current"
-                    : "spark-stage-line"
-              }
-            />
-          ))}
+          <span className="sn-chip sn-chip-coral">1 minute</span>
         </div>
       </header>
 
@@ -731,8 +742,11 @@ export function SparkInterviewSession({
         </section>
 
         <section className="sn-card p-4">
-          <h2 className="text-lg font-extrabold leading-7 text-[var(--sn-ink)]">
-            {currentQuestion}
+          <p className="text-xs font-extrabold uppercase text-[var(--sn-blue-700)]">
+            You have 1 minute to answer. Please look at the camera.
+          </p>
+          <h2 className="mt-2 text-lg font-extrabold leading-7 text-[var(--sn-ink)]">
+            The question is: {currentQuestionText}
           </h2>
           <textarea
             value={currentAnswer}

@@ -526,6 +526,26 @@ export async function getQuestionBankForPosting(
   return data as unknown as SparkQuestionBank | null;
 }
 
+export async function getApprovedQuestionBankForPosting(
+  postingId: string
+): Promise<SparkQuestionBank | null> {
+  const { data, error } = await getSparkSupabase()
+    .from("SparkQuestionBank")
+    .select("*")
+    .eq("postingId", postingId)
+    .eq("status", "Approved")
+    .order("approvedAt", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    if (missingTable(error, "SparkQuestionBank")) return null;
+    fail(error, "Unable to load approved Spark question bank");
+  }
+
+  return data as unknown as SparkQuestionBank | null;
+}
+
 export async function retireQuestionBanksForPosting(
   postingId: string,
   statuses: SparkQuestionBankStatus[] = ["Draft"]

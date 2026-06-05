@@ -1,14 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  getApprovedQuestionBankForPosting,
   getApplicationByInterviewToken,
   SPARK_INTERVIEW_RECORDINGS_BUCKET,
   type JsonValue,
   updateApplication,
 } from "@/lib/spark-db";
+import { reviewScreeningWithRoger } from "@/lib/spark-roger";
 
 type InterviewAnswer = {
   question: string;
   answer: string;
+  questionId?: string;
+  source?: string;
+  sourceLabel?: string;
+  type?: string;
+  targetSeconds?: number | null;
+  generatorLabel?: string;
+  mcpRunId?: string | null;
 };
 
 function stringValue(value: unknown) {
@@ -33,6 +42,13 @@ function answersValue(value: unknown): InterviewAnswer[] {
     .map((item) => ({
       question: stringValue(item.question),
       answer: stringValue(item.answer),
+      questionId: stringValue(item.questionId) || undefined,
+      source: stringValue(item.source) || undefined,
+      sourceLabel: stringValue(item.sourceLabel) || undefined,
+      type: stringValue(item.type) || undefined,
+      targetSeconds: numberValue(item.targetSeconds),
+      generatorLabel: stringValue(item.generatorLabel) || undefined,
+      mcpRunId: stringValue(item.mcpRunId) || null,
     }))
     .filter((item) => item.question && item.answer);
 }
@@ -80,45 +96,6 @@ function updateSession(current: unknown, values: Record<string, unknown>) {
       ...session,
       ...values,
     },
-  };
-}
-
-function createSummary(
-  answers: InterviewAnswer[],
-  postingTitle: string,
-  recordingSeconds: number | null
-) {
-  const answerText = answers.map((item) => item.answer).join(" ");
-  const shortAnswerCount = answers.filter((item) => item.answer.length < 35).length;
-  const availabilityAnswer =
-    answers.find((item) => /availability|scheduling/i.test(item.question))?.answer ||
-    "";
-  const supportAnswer =
-    answers.find((item) => /support|ramp/i.test(item.question))?.answer || "";
-
-  return {
-    status: "completed",
-    generatedBy: "spark_rules_v1",
-    summary:
-      answerText.length > 0
-        ? `Candidate completed a short screening for ${postingTitle}. Responses covered role fit, work style, availability, communication, reliability, and ramp-up needs. Recruiter should review the full answers before making a decision.`
-        : `Candidate completed the screening for ${postingTitle}, but answer content was limited.`,
-    recruiterFocus: [
-      availabilityAnswer
-        ? `Availability/scheduling: ${availabilityAnswer}`
-        : "Confirm availability and schedule fit.",
-      supportAnswer
-        ? `Ramp-up/support: ${supportAnswer}`
-        : "Confirm onboarding support needed.",
-      shortAnswerCount > 2
-        ? "Several answers were brief; recruiter may want follow-up questions."
-        : "Answers appear complete enough for recruiter review.",
-    ],
-    nonBiasNotice:
-      "Summary intentionally avoids protected-class assumptions and should be used only as recruiter review support.",
-    answerCount: answers.length,
-    recordingSeconds,
-    completedAt: new Date().toISOString(),
   };
 }
 
@@ -191,11 +168,21 @@ export async function POST(
             },
       },
     }) as JsonValue;
-    const aiSummary = createSummary(
+    const questionBank = await getApprovedQuestionBankForPosting(
+      application.posting.id
+    );
+    const aiSummary = await reviewScreeningWithRoger({
+      applicationId: application.id,
+      posting: application.posting,
+      candidate: application.candidate,
       answers,
-      application.posting.title,
-      recordingSeconds
-    ) as JsonValue;
+      questionBank,
+      recordingSeconds,
+      recordingCaptured: Boolean(recording.captured),
+      browser: browser as JsonValue,
+      deviceSignals: application.deviceSignals,
+      locationSignals: application.locationSignals,
+    });
 
     const updated = await updateApplication(
       application.id,

@@ -8,13 +8,15 @@ import {
   type JsonValue,
 } from "@/lib/spark-db";
 import {
-  buildSparkQuestionBankDraft,
-  SPARK_QUESTION_BANK_MCP_SERVER_SLUG,
-  SPARK_QUESTION_BANK_MCP_TOOL_NAME,
   SPARK_QUESTION_BANK_PAYLOAD_VERSION,
   SPARK_QUESTION_BANK_PROMPT_VERSION,
   SPARK_QUESTION_BANK_SAFETY_PROFILE,
 } from "@/lib/spark-question-bank";
+import {
+  generateQuestionBankWithRoger,
+  ROGER_MCP_GENERATE_QUESTION_BANK_TOOL,
+  ROGER_MCP_SERVER_SLUG,
+} from "@/lib/spark-roger";
 
 function numberValue(value: unknown) {
   const parsed = Number(value);
@@ -45,10 +47,11 @@ export async function POST(
       );
     }
 
-    const draft = await buildSparkQuestionBankDraft(
+    const generation = await generateQuestionBankWithRoger(
       posting,
       numberValue(body.questionCountTarget)
     );
+    const draft = generation.draft;
 
     await retireQuestionBanksForPosting(posting.id, ["Draft"]);
 
@@ -59,12 +62,12 @@ export async function POST(
       payloadVersion: SPARK_QUESTION_BANK_PAYLOAD_VERSION,
       status: "Draft",
       questionCountTarget: draft.questionCountTarget,
-      generatedBy: "ai",
+      generatedBy: generation.generatedBy,
       generatedAt: new Date().toISOString(),
-      mcpServerSlug: SPARK_QUESTION_BANK_MCP_SERVER_SLUG,
-      mcpToolName: SPARK_QUESTION_BANK_MCP_TOOL_NAME,
-      mcpRunId: null,
-      modelName: "deterministic-template-v1",
+      mcpServerSlug: ROGER_MCP_SERVER_SLUG,
+      mcpToolName: ROGER_MCP_GENERATE_QUESTION_BANK_TOOL,
+      mcpRunId: generation.mcpRunId,
+      modelName: generation.modelName,
       promptVersion: SPARK_QUESTION_BANK_PROMPT_VERSION,
       safetyProfile: SPARK_QUESTION_BANK_SAFETY_PROFILE,
       sourceSnapshot: draft.sourceSnapshot,
@@ -84,8 +87,12 @@ export async function POST(
         questionCount: draft.questions.length,
         jdSourceHash: draft.jdSourceHash,
         promptVersion: SPARK_QUESTION_BANK_PROMPT_VERSION,
-        mcpServerSlug: SPARK_QUESTION_BANK_MCP_SERVER_SLUG,
-        mcpToolName: SPARK_QUESTION_BANK_MCP_TOOL_NAME,
+        generatedBy: generation.generatedBy,
+        mcpServerSlug: ROGER_MCP_SERVER_SLUG,
+        mcpToolName: ROGER_MCP_GENERATE_QUESTION_BANK_TOOL,
+        mcpRunId: generation.mcpRunId,
+        rogerUsed: generation.rogerUsed,
+        rogerFallbackReason: generation.rogerFallbackReason,
       } as JsonValue,
     });
 

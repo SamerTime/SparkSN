@@ -47,6 +47,13 @@ type CommunicationEvent = {
 type InterviewAnswer = {
   question: string;
   answer: string;
+  questionId?: string;
+  source?: string;
+  sourceLabel?: string;
+  type?: string;
+  targetSeconds?: number | null;
+  generatorLabel?: string;
+  mcpRunId?: string | null;
 };
 
 type RecordingView = {
@@ -74,7 +81,12 @@ type QuestionBankQuestion = {
   text: string;
   type: string;
   source: string;
+  source_label?: string;
+  source_category?: string;
   target_seconds: number;
+  generated_by?: string;
+  generator_label?: string;
+  mcp_run_id?: string | null;
   rubric: string[];
   ideal_evidence: string[];
   red_flags: string[];
@@ -143,6 +155,21 @@ function stringArray(value: unknown): string[] {
     : [];
 }
 
+function stringValue(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function sourceCategory(source: string) {
+  if (source.includes("skills")) return "JD skill";
+  if (source.includes("responsibilities")) return "Responsibility";
+  if (source.includes("requirements")) return "Requirement";
+  if (source.includes("qualifications")) return "Qualification";
+  if (source.includes("behavioral")) return "Behavioral bank";
+  if (source.includes("availability")) return "Availability";
+  if (source.includes("roger")) return "Roger";
+  return "Question bank";
+}
+
 function questionBankQuestions(value: unknown): QuestionBankQuestion[] {
   if (!Array.isArray(value)) return [];
 
@@ -153,8 +180,24 @@ function questionBankQuestions(value: unknown): QuestionBankQuestion[] {
       text: typeof item.text === "string" ? item.text : "",
       type: typeof item.type === "string" ? item.type : "role_specific",
       source: typeof item.source === "string" ? item.source : "question_bank",
+      source_label:
+        stringValue(item.source_label) ||
+        stringValue(item.sourceLabel) ||
+        sourceCategory(stringValue(item.source) || "question_bank"),
+      source_category:
+        stringValue(item.source_category) ||
+        stringValue(item.sourceCategory) ||
+        sourceCategory(stringValue(item.source) || "question_bank"),
       target_seconds:
         typeof item.target_seconds === "number" ? item.target_seconds : 20,
+      generated_by: stringValue(item.generated_by),
+      generator_label:
+        stringValue(item.generator_label) ||
+        stringValue(item.generatorLabel) ||
+        (stringValue(item.generated_by).includes("roger")
+          ? "Roger"
+          : "Spark fallback"),
+      mcp_run_id: stringValue(item.mcp_run_id) || stringValue(item.mcpRunId) || null,
       rubric: stringArray(item.rubric),
       ideal_evidence: stringArray(item.ideal_evidence),
       red_flags: stringArray(item.red_flags),
@@ -183,6 +226,18 @@ function interviewAnswers(value: unknown): InterviewAnswer[] {
     .map((item) => ({
       question: typeof item.question === "string" ? item.question.trim() : "",
       answer: typeof item.answer === "string" ? item.answer.trim() : "",
+      questionId: stringValue(item.questionId),
+      source: stringValue(item.source),
+      sourceLabel:
+        stringValue(item.sourceLabel) ||
+        stringValue(item.source_label) ||
+        sourceCategory(stringValue(item.source)),
+      type: stringValue(item.type),
+      targetSeconds:
+        typeof item.targetSeconds === "number" ? item.targetSeconds : null,
+      generatorLabel:
+        stringValue(item.generatorLabel) || stringValue(item.generator_label),
+      mcpRunId: stringValue(item.mcpRunId) || stringValue(item.mcp_run_id) || null,
     }))
     .filter((item) => item.question && item.answer);
 }
@@ -342,6 +397,32 @@ function summaryPreview(value: unknown) {
         : "";
 
   return text || "AI interview summary will appear after the video screen is complete.";
+}
+
+function summaryChips(value: unknown) {
+  const summary = jsonObject(value);
+  const roger = jsonObject(summary.roger);
+  const generatedBy = stringValue(summary.generatedBy);
+  const chips: Array<{ label: string; tone?: "blue" | "coral" }> = [];
+
+  if (generatedBy.includes("roger") || stringValue(roger.status) === "used") {
+    chips.push({ label: "Roger reviewed", tone: "blue" });
+  } else if (generatedBy || stringValue(roger.status)) {
+    chips.push({ label: "Fallback summary", tone: "coral" });
+  }
+
+  const mcpRunId = stringValue(summary.mcpRunId) || stringValue(roger.mcpRunId);
+  if (mcpRunId) chips.push({ label: `MCP ${mcpRunId.slice(0, 8)}` });
+
+  const modelName = stringValue(summary.modelName) || stringValue(roger.modelName);
+  if (modelName) chips.push({ label: modelName });
+
+  return chips;
+}
+
+function summaryItems(value: unknown, key: string) {
+  const summary = jsonObject(value);
+  return stringArray(summary[key]).slice(0, 4);
 }
 
 function candidateName(application: SparkRecruiterApplicationView) {
@@ -1109,6 +1190,11 @@ function QuestionBankPanel({
   const questions = questionBankQuestions(questionBank?.questions);
   const flags = questionBankFlags(questionBank?.agentReview);
   const canApprove = questionBank?.status === "Draft" && questions.length >= 3;
+  const agentReview = jsonObject(questionBank?.agentReview);
+  const roger = jsonObject(agentReview.roger);
+  const rogerStatus = stringValue(roger.status);
+  const generatedByRoger =
+    questionBank?.generatedBy === "mcp" || rogerStatus === "used";
 
   return (
     <div className="border-b border-[var(--sn-line)] bg-[var(--sn-soft)] p-5">
@@ -1125,10 +1211,15 @@ function QuestionBankPanel({
             >
               {questionBank?.status || "Not generated"}
             </span>
-            {questionBank?.mcpServerSlug && (
+            {questionBank && (
               <span className="sn-chip sn-chip-blue py-1 text-xs">
                 <Sparkles className="h-3.5 w-3.5" />
-                MCP ready
+                {generatedByRoger ? "Roger generated" : "Spark fallback"}
+              </span>
+            )}
+            {questionBank?.mcpRunId && (
+              <span className="sn-chip py-1 text-xs">
+                MCP {questionBank.mcpRunId.slice(0, 8)}
               </span>
             )}
           </div>
@@ -1183,17 +1274,28 @@ function QuestionBankPanel({
                     Q{index + 1}
                   </span>
                   <span className="sn-chip sn-chip-blue py-1 text-xs">
+                    {question.source_label || question.source_category || sourceCategory(question.source)}
+                  </span>
+                  <span className="sn-chip py-1 text-xs">
                     {question.type.replace(/_/g, " ")}
+                  </span>
+                  <span className="sn-chip py-1 text-xs">
+                    {question.generator_label || "Spark fallback"}
                   </span>
                   <span className="sn-chip py-1 text-xs">
                     {question.target_seconds}s
                   </span>
+                  {question.mcp_run_id && (
+                    <span className="sn-chip py-1 text-xs">
+                      MCP {question.mcp_run_id.slice(0, 8)}
+                    </span>
+                  )}
                 </div>
                 <p className="mt-3 text-sm font-extrabold leading-6 text-[var(--sn-ink)]">
                   {question.text}
                 </p>
-                <p className="mt-2 text-xs font-bold text-[var(--sn-muted)]">
-                  Source: {question.source}
+                <p className="mt-2 break-all text-xs font-bold text-[var(--sn-muted)]">
+                  Source path: {question.source}
                 </p>
                 {question.rubric.length > 0 && (
                   <ul className="mt-2 list-disc space-y-1 pl-5 text-xs leading-5 text-[var(--sn-muted)]">
@@ -1217,6 +1319,18 @@ function QuestionBankPanel({
                     MCP server
                   </dt>
                   <dd>{questionBank.mcpServerSlug || "Pending"}</dd>
+                </div>
+                <div>
+                  <dt className="font-extrabold text-[var(--sn-ink)]">
+                    MCP run
+                  </dt>
+                  <dd>{questionBank.mcpRunId || "Fallback / not run"}</dd>
+                </div>
+                <div>
+                  <dt className="font-extrabold text-[var(--sn-ink)]">
+                    Model
+                  </dt>
+                  <dd>{questionBank.modelName || "Pending"}</dd>
                 </div>
                 <div>
                   <dt className="font-extrabold text-[var(--sn-ink)]">
@@ -1515,6 +1629,21 @@ function DeleteSubmissionDialog({
   );
 }
 
+function SummaryList({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div>
+      <p className="text-xs font-extrabold uppercase text-[var(--sn-muted)]">
+        {title}
+      </p>
+      <ul className="mt-2 space-y-1 text-xs leading-5 text-[var(--sn-muted)]">
+        {items.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function CandidateDetailDrawer({
   application,
   onClose,
@@ -1528,6 +1657,10 @@ function CandidateDetailDrawer({
   const answers = interviewAnswers(application.interviewTranscript);
   const recordingView = application.recordingView;
   const profileLocation = candidateLocation(application);
+  const aiSummaryChips = summaryChips(application.aiSummary);
+  const recruiterFocus = summaryItems(application.aiSummary, "recruiterFocus");
+  const strengths = summaryItems(application.aiSummary, "strengths");
+  const concerns = summaryItems(application.aiSummary, "concerns");
 
   return (
     <div className="fixed inset-0 z-50">
@@ -1596,13 +1729,46 @@ function CandidateDetailDrawer({
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
             <div className="min-w-0 space-y-4">
               <section className="rounded-lg border border-[var(--sn-line)] bg-white p-4">
-                <div className="flex items-center gap-2 text-sm font-extrabold text-[var(--sn-ink)]">
-                  <Sparkles className="h-4 w-4 text-[var(--sn-coral)]" />
-                  AI summary
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-sm font-extrabold text-[var(--sn-ink)]">
+                    <Sparkles className="h-4 w-4 text-[var(--sn-coral)]" />
+                    AI summary
+                  </div>
+                  {aiSummaryChips.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {aiSummaryChips.map((chip) => (
+                        <span
+                          key={chip.label}
+                          className={`sn-chip py-1 text-xs ${
+                            chip.tone === "blue"
+                              ? "sn-chip-blue"
+                              : chip.tone === "coral"
+                                ? "sn-chip-coral"
+                                : ""
+                          }`}
+                        >
+                          {chip.label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <p className="mt-3 text-sm leading-6 text-[var(--sn-muted)]">
                   {summaryPreview(application.aiSummary)}
                 </p>
+                {[recruiterFocus, strengths, concerns].some((items) => items.length > 0) && (
+                  <div className="mt-4 grid gap-3 lg:grid-cols-3">
+                    {recruiterFocus.length > 0 && (
+                      <SummaryList title="Focus" items={recruiterFocus} />
+                    )}
+                    {strengths.length > 0 && (
+                      <SummaryList title="Strengths" items={strengths} />
+                    )}
+                    {concerns.length > 0 && (
+                      <SummaryList title="Review" items={concerns} />
+                    )}
+                  </div>
+                )}
               </section>
 
               <section
@@ -1679,6 +1845,28 @@ function CandidateDetailDrawer({
                         <p className="text-sm font-extrabold leading-6 text-[var(--sn-ink)]">
                           {index + 1}. {item.question}
                         </p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {item.sourceLabel && (
+                            <span className="sn-chip sn-chip-blue py-1 text-xs">
+                              {item.sourceLabel}
+                            </span>
+                          )}
+                          {item.type && (
+                            <span className="sn-chip py-1 text-xs">
+                              {item.type.replace(/_/g, " ")}
+                            </span>
+                          )}
+                          {item.generatorLabel && (
+                            <span className="sn-chip py-1 text-xs">
+                              {item.generatorLabel}
+                            </span>
+                          )}
+                          {item.mcpRunId && (
+                            <span className="sn-chip py-1 text-xs">
+                              MCP {item.mcpRunId.slice(0, 8)}
+                            </span>
+                          )}
+                        </div>
                         <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-[var(--sn-muted)]">
                           {item.answer}
                         </p>

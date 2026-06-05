@@ -8,20 +8,25 @@ export const SPARK_QUESTION_BANK_MCP_SERVER_SLUG =
   "kaizenis_spark_question_agent";
 export const SPARK_QUESTION_BANK_MCP_TOOL_NAME = "generate_question_bank";
 
-type QuestionType =
+export type QuestionType =
   | "technical"
   | "behavioral"
   | "role_specific"
   | "availability"
   | "safety";
 
-type DraftQuestion = {
+export type DraftQuestion = {
   id: string;
   text: string;
   type: QuestionType;
   source: string;
+  source_label?: string;
+  source_category?: string;
   target_seconds: number;
   editable: boolean;
+  generated_by?: string;
+  generator_label?: string;
+  mcp_run_id?: string | null;
   rubric: string[];
   ideal_evidence: string[];
   red_flags: string[];
@@ -123,12 +128,19 @@ function sourceSnapshot(posting: SparkJobPosting) {
 function baseQuestion(
   seedHash: string,
   index: number,
-  question: Omit<DraftQuestion, "id" | "editable" | "protected_class_risk" | "scoring">
+  question: Omit<
+    DraftQuestion,
+    "id" | "editable" | "protected_class_risk" | "scoring"
+  >
 ): DraftQuestion {
   return {
     id: `qb_${seedHash.slice(0, 8)}_${String(index + 1).padStart(2, "0")}`,
     editable: true,
     protected_class_risk: "low",
+    generated_by: "spark_fallback",
+    generator_label: "Spark fallback",
+    source_label: sourceCategory(question.source),
+    source_category: sourceCategory(question.source),
     scoring: {
       max_score: 5,
       anchors: {
@@ -139,6 +151,16 @@ function baseQuestion(
     },
     ...question,
   };
+}
+
+function sourceCategory(source: string) {
+  if (source.includes("skills")) return "JD skill";
+  if (source.includes("responsibilities")) return "Responsibility";
+  if (source.includes("requirements")) return "Requirement";
+  if (source.includes("qualifications")) return "Qualification";
+  if (source.includes("behavioral")) return "Behavioral bank";
+  if (source.includes("availability")) return "Availability";
+  return "Question bank";
 }
 
 function roleRubric(sourceLabel: string) {
@@ -170,7 +192,12 @@ export async function buildSparkQuestionBankDraft(
   const responsibilities = splitTextItems(cleanText(posting.responsibilities));
   const requirements = splitTextItems(cleanText(posting.requirements));
   const qualifications = splitTextItems(cleanText(posting.qualifications), 4);
-  const candidates: Array<Omit<DraftQuestion, "id" | "editable" | "protected_class_risk" | "scoring">> = [];
+  const candidates: Array<
+    Omit<
+      DraftQuestion,
+      "id" | "editable" | "protected_class_risk" | "scoring"
+    >
+  > = [];
 
   skills.slice(0, 3).forEach((skill, index) => {
     candidates.push({
