@@ -388,7 +388,7 @@ export async function generateQuestionBankWithRoger(
     posting,
     requestedTarget
   );
-  let dashboard47Error: string | null = null;
+  const dashboard47Error: string | null = null;
 
   if (dashboard47QuestionBankConfigured()) {
     try {
