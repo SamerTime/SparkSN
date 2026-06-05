@@ -4,39 +4,27 @@ import {
   ArrowRight,
   BriefcaseBusiness,
   CheckCircle2,
-  ClipboardList,
   Clock3,
   MailCheck,
-  MapPin,
-  MessageSquareText,
-  ShieldAlert,
-  Sparkles,
   UserRoundCheck,
   Video,
 } from "lucide-react";
 import { getSparkRecruiterUser } from "@/lib/spark-auth";
 import {
   createInterviewRecordingSignedUrl,
-  countPublishedJobs,
   listApplicationStatuses,
+  listPublishedJobs,
   listRecruiterApplications,
   SPARK_INTERVIEW_RECORDINGS_BUCKET,
 } from "@/lib/spark-db";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { SparkInitials } from "@/components/spark/SparkBrand";
-import { SparkRecruiterActions } from "@/components/spark/SparkRecruiterActions";
 import { SparkRecruiterLogoutButton } from "@/components/spark/SparkRecruiterLogoutButton";
+import {
+  SparkRecruiterWorkspace,
+  type SparkRecruiterApplicationView,
+} from "@/components/spark/SparkRecruiterWorkspace";
 
 export const dynamic = "force-dynamic";
-
-type CommunicationEvent = {
-  type?: string;
-  label?: string;
-  at?: string;
-  channel?: string;
-  messagePreview?: string;
-};
 
 type RecordingReference = {
   bucket: string;
@@ -50,35 +38,10 @@ type RecordingView = RecordingReference & {
   signedUrl: string;
 };
 
-type InterviewAnswer = {
-  question: string;
-  answer: string;
-};
-
 function jsonObject(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
-}
-
-function communicationEvents(value: unknown): CommunicationEvent[] {
-  const state = jsonObject(value);
-  return Array.isArray(state.events)
-    ? (state.events as CommunicationEvent[]).slice(-4).reverse()
-    : [];
-}
-
-function interviewAnswers(value: unknown): InterviewAnswer[] {
-  const transcript = jsonObject(value);
-  if (!Array.isArray(transcript.answers)) return [];
-
-  return transcript.answers
-    .map((item) => jsonObject(item))
-    .map((item) => ({
-      question: typeof item.question === "string" ? item.question.trim() : "",
-      answer: typeof item.answer === "string" ? item.answer.trim() : "",
-    }))
-    .filter((item) => item.question && item.answer);
 }
 
 function numberValue(value: unknown) {
@@ -108,139 +71,29 @@ function recordingReference(value: unknown): RecordingReference | null {
   };
 }
 
-function locationSummary(value: unknown) {
-  const signals = jsonObject(value);
-  const browserLocation = jsonObject(signals.browserGeolocation);
-  const providedLocation = jsonObject(signals.candidateProvidedLocation);
-  const capture = jsonObject(signals.capture);
-  const captureStatus =
-    typeof capture.status === "string" ? capture.status : "";
+type SparkRecruiterPageProps = {
+  searchParams?: Promise<{
+    application?: string | string[];
+  }>;
+};
 
-  if (typeof browserLocation.latitude === "number") {
-    return {
-      label: "Browser location captured",
-      needsReview: false,
-    };
-  }
-
-  if (captureStatus === "denied") {
-    return {
-      label: "Candidate consented; browser location permission was denied",
-      needsReview: true,
-    };
-  }
-
-  if (captureStatus === "unsupported") {
-    return {
-      label: "Browser does not support location capture",
-      needsReview: true,
-    };
-  }
-
-  if (captureStatus === "error") {
-    return {
-      label: "Browser location capture failed",
-      needsReview: true,
-    };
-  }
-
-  const city = typeof providedLocation.city === "string" ? providedLocation.city : "";
-  const state = typeof providedLocation.state === "string" ? providedLocation.state : "";
-  const place = [city, state].filter(Boolean).join(", ");
-  return place
-    ? {
-        label: `Candidate entered ${place}; browser location not captured`,
-        needsReview: true,
-      }
-    : {
-        label: "Location needs review",
-        needsReview: true,
-      };
-}
-
-function statusClass(status: string) {
-  if (status === "Applied") {
-    return "border-[var(--sn-blue-200)] bg-[var(--sn-blue-50)] text-[var(--sn-blue-700)]";
-  }
-  if (status === "RecruiterApproved") {
-    return "border-[var(--sn-success)] bg-[var(--sn-success-50)] text-[var(--sn-success)]";
-  }
-  if (status === "InterviewInvited") {
-    return "border-[var(--sn-coral-100)] bg-[var(--sn-coral-50)] text-[var(--sn-coral-600)]";
-  }
-  if (status === "InterviewStarted") {
-    return "border-[var(--sn-blue-200)] bg-[var(--sn-blue-50)] text-[var(--sn-blue-700)]";
-  }
-  if (status === "InterviewCompleted") {
-    return "border-[var(--sn-success)] bg-[var(--sn-success-50)] text-[var(--sn-success)]";
-  }
-  if (status === "Declined") {
-    return "border-[var(--sn-danger)] bg-[var(--sn-danger-50)] text-[var(--sn-danger)]";
-  }
-  if (status === "Vetted") {
-    return "border-[var(--sn-success)] bg-[var(--sn-success-50)] text-[var(--sn-success)]";
-  }
-  return "border-[var(--sn-line)] bg-white text-[var(--sn-ink-2)]";
-}
-
-function formatStatus(status: string) {
-  return status.replace(/([a-z])([A-Z])/g, "$1 $2");
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
-function formatEventDate(value?: string) {
-  if (!value) return "";
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-
-  return formatDate(value);
-}
-
-function formatDuration(seconds: number | null) {
-  if (!seconds) return "";
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-  if (!minutes) return `${remainingSeconds}s`;
-  return `${minutes}m ${remainingSeconds.toString().padStart(2, "0")}s`;
-}
-
-function formatBytes(bytes: number | null) {
-  if (!bytes) return "";
-  if (bytes < 1_000_000) return `${Math.round(bytes / 1_000)} KB`;
-  return `${(bytes / 1_000_000).toFixed(1)} MB`;
-}
-
-function summaryPreview(value: unknown) {
-  const summary = jsonObject(value);
-  const text =
-    typeof summary.summary === "string"
-      ? summary.summary
-      : typeof summary.recruiterSummary === "string"
-        ? summary.recruiterSummary
-        : "";
-
-  return text || "AI interview summary will appear here after the video screen is complete.";
-}
-
-export default async function SparkRecruiterPage() {
+export default async function SparkRecruiterPage({
+  searchParams,
+}: SparkRecruiterPageProps) {
   const recruiterUser = await getSparkRecruiterUser();
   if (!recruiterUser) {
     redirect("/spark/login?returnTo=/spark/recruiter");
   }
 
-  const [applications, statusRows, postingCount] = await Promise.all([
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+  const initialApplicationId = Array.isArray(resolvedSearchParams.application)
+    ? resolvedSearchParams.application[0]
+    : resolvedSearchParams.application || null;
+
+  const [applications, statusRows, publishedJobs] = await Promise.all([
     listRecruiterApplications(),
     listApplicationStatuses(),
-    countPublishedJobs(),
+    listPublishedJobs(),
   ]);
   const recordingViewsById = new Map(
     await Promise.all(
@@ -274,6 +127,14 @@ export default async function SparkRecruiterPage() {
     statusRows.filter((item) => item.status === "InterviewInvited").length;
   const completedInterviews =
     statusRows.filter((item) => item.status === "InterviewCompleted").length;
+  const postingCount = publishedJobs.length;
+  const recruiterApplications: SparkRecruiterApplicationView[] =
+    applications.map((application) => ({
+      ...application,
+      recordingView:
+        (recordingViewsById.get(application.id) as RecordingView | null) ||
+        null,
+    }));
 
   return (
     <main className="sn-page">
@@ -359,257 +220,11 @@ export default async function SparkRecruiterPage() {
       </section>
 
       <section className="sn-container py-8">
-        {applications.length === 0 ? (
-          <div className="sn-card border-dashed p-8 text-center">
-            <h2 className="text-xl font-extrabold text-[var(--sn-ink)]">
-              No Spark applications yet
-            </h2>
-            <p className="mt-2 text-sm text-[var(--sn-muted)]">
-              Submit the public apply form for a published job to see candidates
-              here.
-            </p>
-          </div>
-        ) : (
-          <div className="grid gap-4">
-            {applications.map((application) => {
-              const events = communicationEvents(application.communicationState);
-              const answers = interviewAnswers(application.interviewTranscript);
-              const recordingView = recordingViewsById.get(application.id) as
-                | RecordingView
-                | null;
-              const location = locationSummary(application.locationSignals);
-              const needsLocationReview = location.needsReview;
-              const candidateName =
-                application.candidateName ||
-                [
-                  application.candidate?.firstName,
-                  application.candidate?.lastName,
-                ]
-                  .filter(Boolean)
-                  .join(" ") ||
-                "Unnamed candidate";
-
-              return (
-                <article
-                  key={application.id}
-                  className="sn-card overflow-hidden"
-                >
-                  <div className="border-b border-[var(--sn-line)] bg-white p-5">
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                      <SparkInitials label={candidateName} />
-                      <div className="min-w-0 flex-1">
-                        <h2 className="text-2xl font-extrabold text-[var(--sn-ink)]">
-                          {candidateName}
-                        </h2>
-                        <div className="mt-2 flex flex-wrap gap-2 text-sm">
-                          {application.candidateEmail && (
-                            <span className="sn-chip">{application.candidateEmail}</span>
-                          )}
-                          {application.candidatePhone && (
-                            <span className="sn-chip">{application.candidatePhone}</span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                        <Badge className={`border ${statusClass(application.status)}`}>
-                          {formatStatus(application.status)}
-                        </Badge>
-                        <span className="text-xs text-[var(--sn-muted)]">
-                          Updated {formatDate(application.updatedAt)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-5 bg-[var(--sn-soft)] p-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-                    <div className="min-w-0">
-                      <div className="grid gap-4 lg:grid-cols-3">
-                        <section className="rounded-lg border border-[var(--sn-line)] bg-white p-4">
-                          <div className="text-xs font-extrabold uppercase text-[var(--sn-muted)]">
-                            Role
-                          </div>
-                          <div className="mt-2 text-sm font-extrabold text-[var(--sn-ink)]">
-                            {application.posting.title}
-                          </div>
-                          <div className="mt-1 text-sm text-[var(--sn-muted)]">
-                            {application.posting.clientName || "Spark client"}
-                          </div>
-                          <Link
-                            href={`/jobs/${application.posting.slug}`}
-                            className="mt-3 inline-flex items-center gap-1 text-sm font-bold text-[var(--sn-blue-700)] hover:text-[var(--sn-blue)]"
-                          >
-                            View public posting
-                            <ArrowRight className="h-3.5 w-3.5" />
-                          </Link>
-                        </section>
-
-                        <section className="rounded-lg border border-[var(--sn-line)] bg-white p-4">
-                          <div className="flex items-center gap-2 text-xs font-extrabold uppercase text-[var(--sn-muted)]">
-                            <Sparkles className="h-4 w-4 text-[var(--sn-coral)]" />
-                            AI summary
-                          </div>
-                          <p className="mt-2 line-clamp-5 text-sm leading-6 text-[var(--sn-muted)]">
-                            {summaryPreview(application.aiSummary)}
-                          </p>
-                        </section>
-
-                        <section
-                          className={
-                            needsLocationReview
-                              ? "rounded-lg border border-[var(--sn-coral-100)] bg-[var(--sn-coral-50)] p-4"
-                              : "rounded-lg border border-[#bde8ce] bg-[var(--sn-success-50)] p-4"
-                          }
-                        >
-                          <div className="flex items-center gap-2 text-xs font-extrabold uppercase text-[var(--sn-muted)]">
-                            {needsLocationReview ? (
-                              <ShieldAlert className="h-4 w-4 text-[var(--sn-coral-600)]" />
-                            ) : (
-                              <MapPin className="h-4 w-4 text-[var(--sn-success)]" />
-                            )}
-                            Location signal
-                          </div>
-                          <p
-                            className={
-                              needsLocationReview
-                                ? "mt-2 text-sm font-bold leading-6 text-[var(--sn-coral-600)]"
-                                : "mt-2 text-sm font-bold leading-6 text-[var(--sn-success)]"
-                            }
-                          >
-                            {location.label}
-                          </p>
-                          {needsLocationReview && (
-                            <p className="mt-2 text-xs leading-5 text-[var(--sn-coral-600)]">
-                              Review before sending an interview link.
-                            </p>
-                          )}
-                        </section>
-                      </div>
-
-                      {answers.length > 0 && (
-                        <section className="mt-4 rounded-lg border border-[var(--sn-line)] bg-white p-4">
-                          <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div className="flex items-center gap-2 text-sm font-extrabold text-[var(--sn-ink)]">
-                              <ClipboardList className="h-4 w-4 text-[var(--sn-blue)]" />
-                              Interview answers
-                            </div>
-                            <span className="sn-chip py-1 text-xs">
-                              {answers.length} {answers.length === 1 ? "answer" : "answers"}
-                            </span>
-                          </div>
-                          <ol className="mt-3 divide-y divide-[var(--sn-line)]">
-                            {answers.map((item, index) => (
-                              <li
-                                key={`${item.question}-${index}`}
-                                className="py-3 first:pt-0 last:pb-0"
-                              >
-                                <p className="text-sm font-extrabold leading-6 text-[var(--sn-ink)]">
-                                  {index + 1}. {item.question}
-                                </p>
-                                <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-[var(--sn-muted)]">
-                                  {item.answer}
-                                </p>
-                              </li>
-                            ))}
-                          </ol>
-                        </section>
-                      )}
-
-                      {recordingView && (
-                        <section className="mt-4 rounded-lg border border-[var(--sn-line)] bg-white p-4">
-                          <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div className="flex items-center gap-2 text-sm font-extrabold text-[var(--sn-ink)]">
-                              <Video className="h-4 w-4 text-[var(--sn-blue)]" />
-                              Interview recording
-                            </div>
-                            <span className="sn-chip py-1 text-xs">
-                              {[formatDuration(recordingView.durationSeconds), formatBytes(recordingView.sizeBytes)]
-                                .filter(Boolean)
-                                .join(" / ") || "Video captured"}
-                            </span>
-                          </div>
-                          <video
-                            controls
-                            preload="metadata"
-                            src={recordingView.signedUrl}
-                            className="mt-3 aspect-video w-full rounded-lg bg-black"
-                          />
-                        </section>
-                      )}
-
-                      <section className="mt-4 rounded-lg border border-[var(--sn-line)] bg-white p-4">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div className="flex items-center gap-2 text-sm font-extrabold text-[var(--sn-ink)]">
-                            <MessageSquareText className="h-4 w-4 text-[var(--sn-blue)]" />
-                            Communication log
-                          </div>
-                          <span className="sn-chip py-1 text-xs">
-                            {events.length} {events.length === 1 ? "event" : "events"}
-                          </span>
-                        </div>
-
-                        {events.length === 0 ? (
-                          <p className="mt-3 text-sm text-[var(--sn-muted)]">
-                            No communication events recorded yet.
-                          </p>
-                        ) : (
-                          <ol className="mt-3 divide-y divide-[var(--sn-line)]">
-                            {events.map((event, index) => {
-                              const eventDate = formatEventDate(event.at);
-
-                              return (
-                                <li
-                                  key={`${event.type}-${event.at}-${index}`}
-                                  className="grid gap-1 py-3 first:pt-0 last:pb-0"
-                                >
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <span className="font-bold text-[var(--sn-ink)]">
-                                      {event.label || event.type || "Event"}
-                                    </span>
-                                    {event.channel && (
-                                      <span className="sn-chip py-1 text-xs">
-                                        {event.channel}
-                                      </span>
-                                    )}
-                                    {eventDate && (
-                                      <span className="text-xs text-[var(--sn-muted)]">
-                                        {eventDate}
-                                      </span>
-                                    )}
-                                  </div>
-                                  {event.messagePreview && (
-                                    <p className="text-sm leading-6 text-[var(--sn-muted)]">
-                                      {event.messagePreview}
-                                    </p>
-                                  )}
-                                </li>
-                              );
-                            })}
-                          </ol>
-                        )}
-                      </section>
-                    </div>
-
-                    <aside className="rounded-lg border border-[var(--sn-line)] bg-white p-4">
-                      <h3 className="text-base font-extrabold text-[var(--sn-ink)]">
-                        Recruiter actions
-                      </h3>
-                      <p className="mt-2 text-sm leading-6 text-[var(--sn-muted)]">
-                        Save notes, update status, and prepare the next candidate
-                        communication.
-                      </p>
-                      <div className="mt-4">
-                        <SparkRecruiterActions
-                          applicationId={application.id}
-                          initialNotes={application.recruiterNotes || ""}
-                        />
-                      </div>
-                    </aside>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        )}
+        <SparkRecruiterWorkspace
+          applications={recruiterApplications}
+          jobs={publishedJobs}
+          initialApplicationId={initialApplicationId}
+        />
       </section>
     </main>
   );
