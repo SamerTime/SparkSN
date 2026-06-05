@@ -125,7 +125,7 @@ function locationSummary(value: unknown) {
 
   if (captureStatus === "denied") {
     return {
-      label: "Browser location permission denied",
+      label: "Candidate consented; browser location permission was denied",
       needsReview: true,
     };
   }

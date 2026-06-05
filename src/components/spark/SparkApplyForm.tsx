@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Camera,
@@ -40,6 +40,13 @@ type LocationCaptureState =
   | "unsupported"
   | "error";
 
+type BrowserLocationPermission =
+  | "unknown"
+  | "prompt"
+  | "granted"
+  | "denied"
+  | "unsupported";
+
 type Submission = {
   applicationId: string;
   status: string;
@@ -59,6 +66,8 @@ export function SparkApplyForm({
   const [location, setLocation] = useState<LocationCapture | null>(null);
   const [locationCaptureState, setLocationCaptureState] =
     useState<LocationCaptureState>("idle");
+  const [browserLocationPermission, setBrowserLocationPermission] =
+    useState<BrowserLocationPermission>("unknown");
   const [locationStatus, setLocationStatus] = useState(
     "Check location consent below to enable capture."
   );
@@ -92,10 +101,60 @@ export function SparkApplyForm({
     setLocationCaptureState(checked ? "ready" : "idle");
     setLocationStatus(
       checked
-        ? "Consent checked. Tap capture location and allow the browser prompt."
+        ? "Consent checked. Tap capture location and allow the browser permission prompt."
         : "Check location consent below to enable capture."
     );
   };
+
+  useEffect(() => {
+    if (!form.geolocationConsent) {
+      setBrowserLocationPermission("unknown");
+      return;
+    }
+
+    if (!navigator.geolocation) {
+      setBrowserLocationPermission("unsupported");
+      return;
+    }
+
+    if (!navigator.permissions?.query) {
+      setBrowserLocationPermission("unknown");
+      return;
+    }
+
+    let active = true;
+    let permissionStatus: PermissionStatus | null = null;
+
+    navigator.permissions
+      .query({ name: "geolocation" as PermissionName })
+      .then((status) => {
+        if (!active) return;
+
+        permissionStatus = status;
+        const updatePermission = () => {
+          const nextState = status.state as BrowserLocationPermission;
+          setBrowserLocationPermission(nextState);
+
+          if (nextState === "denied" && !location) {
+            setLocationCaptureState("denied");
+            setLocationStatus(
+              "Consent is checked, but browser location permission is blocked for this site. Open site settings, allow Location, then try again."
+            );
+          }
+        };
+
+        updatePermission();
+        status.onchange = updatePermission;
+      })
+      .catch(() => {
+        if (active) setBrowserLocationPermission("unsupported");
+      });
+
+    return () => {
+      active = false;
+      if (permissionStatus) permissionStatus.onchange = null;
+    };
+  }, [form.geolocationConsent, location]);
 
   const captureLocation = () => {
     if (!form.geolocationConsent) {
@@ -111,6 +170,16 @@ export function SparkApplyForm({
       setLocationStatus(
         "This browser does not support location capture. Recruiter review will use the city/state you entered."
       );
+      return;
+    }
+
+    if (browserLocationPermission === "denied") {
+      setLocation(null);
+      setLocationCaptureState("denied");
+      setLocationStatus(
+        "Consent is checked, but browser location permission is blocked for this site. Open site settings, allow Location, then try again."
+      );
+      toast.error("Browser location permission is blocked for this site.");
       return;
     }
 
@@ -138,9 +207,10 @@ export function SparkApplyForm({
       (error) => {
         setLocation(null);
         if (error.code === error.PERMISSION_DENIED) {
+          setBrowserLocationPermission("denied");
           setLocationCaptureState("denied");
           setLocationStatus(
-            "Browser permission was denied. Allow location in site settings and try again, or submit for recruiter review with manual city/state."
+            "Consent is checked, but browser location permission was denied. Allow Location in site settings and try again, or submit for recruiter review with manual city/state."
           );
         } else {
           setLocationCaptureState("error");
@@ -269,8 +339,16 @@ export function SparkApplyForm({
     locationCaptureState === "captured"
       ? "Refresh location"
       : locationCaptureState === "denied"
-        ? "Try location again"
+        ? "Retry location"
         : "Capture location";
+  const permissionStatusText =
+    form.geolocationConsent && browserLocationPermission === "denied"
+      ? "Consent granted; browser permission blocked."
+      : form.geolocationConsent && browserLocationPermission === "granted"
+        ? "Consent granted; browser permission allowed."
+        : form.geolocationConsent && browserLocationPermission === "prompt"
+          ? "Consent granted; browser will ask for permission."
+          : "";
 
   return (
     <form onSubmit={submit} className="flex min-h-[720px] flex-col bg-[var(--sn-soft)]">
@@ -482,6 +560,11 @@ export function SparkApplyForm({
                   <p className="mt-1 text-xs leading-5 text-[var(--sn-muted)]">
                     {locationStatus}
                   </p>
+                  {permissionStatusText && (
+                    <p className="mt-1 text-[11px] font-bold leading-4 text-[var(--sn-muted)]">
+                      {permissionStatusText}
+                    </p>
+                  )}
                 </div>
               </div>
               <Button

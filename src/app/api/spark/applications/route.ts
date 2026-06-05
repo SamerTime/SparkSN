@@ -50,6 +50,20 @@ function appendCommunicationEvents(
   };
 }
 
+function locationReviewReason(status: string, captured: boolean) {
+  if (captured) return "Browser location captured with candidate consent.";
+  if (status === "denied") {
+    return "Candidate consented, but browser location permission was denied.";
+  }
+  if (status === "unsupported") {
+    return "Candidate consented, but this browser does not support location capture.";
+  }
+  if (status === "error") {
+    return "Candidate consented, but browser location capture failed.";
+  }
+  return "Candidate consented, but browser location was not captured.";
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -189,9 +203,10 @@ export async function POST(request: NextRequest) {
       },
       fraudReview: {
         needsLocationReview: !browserLocation,
-        reason: browserLocation
-          ? "Browser location captured with candidate consent."
-          : "Candidate consented, but browser location was not captured.",
+        reason: locationReviewReason(
+          locationCaptureStatus,
+          Boolean(browserLocation)
+        ),
       },
     };
     const deviceSignals: JsonValue = {
