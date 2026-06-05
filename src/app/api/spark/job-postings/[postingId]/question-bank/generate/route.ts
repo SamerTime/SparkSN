@@ -8,7 +8,7 @@ import {
   type JsonValue,
 } from "@/lib/spark-db";
 import {
-  buildSparkQuestionBankDraft,
+  fetchSparkQuestionBankDraftFromMcp,
   SPARK_QUESTION_BANK_MCP_SERVER_SLUG,
   SPARK_QUESTION_BANK_MCP_TOOL_NAME,
   SPARK_QUESTION_BANK_PAYLOAD_VERSION,
@@ -45,7 +45,7 @@ export async function POST(
       );
     }
 
-    const draft = await buildSparkQuestionBankDraft(
+    const { draft, mcpRunId, modelName } = await fetchSparkQuestionBankDraftFromMcp(
       posting,
       numberValue(body.questionCountTarget)
     );
@@ -59,12 +59,12 @@ export async function POST(
       payloadVersion: SPARK_QUESTION_BANK_PAYLOAD_VERSION,
       status: "Draft",
       questionCountTarget: draft.questionCountTarget,
-      generatedBy: "ai",
+      generatedBy: "mcp",
       generatedAt: new Date().toISOString(),
       mcpServerSlug: SPARK_QUESTION_BANK_MCP_SERVER_SLUG,
       mcpToolName: SPARK_QUESTION_BANK_MCP_TOOL_NAME,
-      mcpRunId: null,
-      modelName: "deterministic-template-v1",
+      mcpRunId,
+      modelName: modelName ?? "roger:question-bank-v1.0",
       promptVersion: SPARK_QUESTION_BANK_PROMPT_VERSION,
       safetyProfile: SPARK_QUESTION_BANK_SAFETY_PROFILE,
       sourceSnapshot: draft.sourceSnapshot,
