@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   ArrowRight,
   BriefcaseBusiness,
@@ -802,6 +803,7 @@ export function SparkRecruiterWorkspace({
                             current === application.id ? null : application.id
                           )
                         }
+                        onClose={() => setOpenMenuApplicationId(null)}
                         onRun={(option) => runWorkflowAction(application, option)}
                       />
                     </div>
@@ -869,17 +871,134 @@ function WorkflowStatusMenu({
   isOpen,
   loadingWorkflowId,
   onToggle,
+  onClose,
   onRun,
 }: {
   application: SparkRecruiterApplicationView;
   isOpen: boolean;
   loadingWorkflowId: string | null;
   onToggle: () => void;
+  onClose: () => void;
   onRun: (option: WorkflowStatusOption) => void;
 }) {
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [menuPosition, setMenuPosition] = useState<{
+    left: number;
+    top: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setMenuPosition(null);
+      return;
+    }
+
+    const positionMenu = () => {
+      const button = buttonRef.current;
+      if (!button) return;
+
+      const rect = button.getBoundingClientRect();
+      const margin = 12;
+      const gap = 8;
+      const menuWidth = 192;
+      const menuHeight = WORKFLOW_STATUS_OPTIONS.length * 40 + 8;
+      const left = Math.min(
+        Math.max(margin, rect.right - menuWidth),
+        window.innerWidth - menuWidth - margin
+      );
+      const opensDown =
+        rect.bottom + gap + menuHeight <= window.innerHeight - margin;
+      const top = opensDown
+        ? rect.bottom + gap
+        : Math.max(margin, rect.top - menuHeight - gap);
+
+      setMenuPosition({ left, top });
+    };
+
+    positionMenu();
+    window.addEventListener("resize", positionMenu);
+    window.addEventListener("scroll", positionMenu, true);
+
+    return () => {
+      window.removeEventListener("resize", positionMenu);
+      window.removeEventListener("scroll", positionMenu, true);
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (buttonRef.current?.contains(target)) return;
+      if (menuRef.current?.contains(target)) return;
+      onClose();
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen, onClose]);
+
+  const menu =
+    isOpen && menuPosition && typeof document !== "undefined"
+      ? createPortal(
+          <div
+            ref={menuRef}
+            className="z-[80] max-h-[min(70vh,320px)] w-48 overflow-y-auto rounded-lg border border-[var(--sn-line)] bg-white p-1 shadow-xl"
+            style={{
+              left: menuPosition.left,
+              position: "fixed",
+              top: menuPosition.top,
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            {WORKFLOW_STATUS_OPTIONS.map((option) => {
+              const active = workflowOptionActive(application.status, option);
+              const workflowId = `${application.id}:${option.status || option.action}`;
+              const loading = loadingWorkflowId === workflowId;
+
+              return (
+                <button
+                  key={option.label}
+                  type="button"
+                  className={`flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm font-bold ${workflowToneClass(
+                    option,
+                    active
+                  )}`}
+                  disabled={Boolean(loadingWorkflowId) || active}
+                  onClick={() => {
+                    if (!active) onRun(option);
+                  }}
+                >
+                  <span>{option.label}</span>
+                  {loading ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : active ? (
+                    <span className="h-2 w-2 rounded-full bg-current" />
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>,
+          document.body
+        )
+      : null;
+
   return (
     <div className="absolute right-4 top-4 z-20">
       <Button
+        ref={buttonRef}
         type="button"
         variant="outline"
         size="icon"
@@ -893,40 +1012,7 @@ function WorkflowStatusMenu({
         <MoreVertical className="h-4 w-4" />
       </Button>
 
-      {isOpen && (
-        <div
-          className="absolute right-0 top-11 w-48 rounded-lg border border-[var(--sn-line)] bg-white p-1 shadow-lg"
-          onClick={(event) => event.stopPropagation()}
-        >
-          {WORKFLOW_STATUS_OPTIONS.map((option) => {
-            const active = workflowOptionActive(application.status, option);
-            const workflowId = `${application.id}:${option.status || option.action}`;
-            const loading = loadingWorkflowId === workflowId;
-
-            return (
-              <button
-                key={option.label}
-                type="button"
-                className={`flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm font-bold ${workflowToneClass(
-                  option,
-                  active
-                )}`}
-                disabled={Boolean(loadingWorkflowId) || active}
-                onClick={() => {
-                  if (!active) onRun(option);
-                }}
-              >
-                <span>{option.label}</span>
-                {loading ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : active ? (
-                  <span className="h-2 w-2 rounded-full bg-current" />
-                ) : null}
-              </button>
-            );
-          })}
-        </div>
-      )}
+      {menu}
     </div>
   );
 }
