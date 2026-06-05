@@ -27,6 +27,8 @@ export type SparkApplicationStatus =
   | "Offer"
   | "Declined";
 
+export type SparkQuestionBankStatus = "Draft" | "Approved" | "Retired";
+
 export type SparkJobPosting = {
   id: string;
   sourceSystem: string;
@@ -94,6 +96,44 @@ export type SparkJobInvitation = {
   updatedAt: string;
 };
 
+export type SparkQuestionBank = {
+  id: string;
+  postingId: string;
+  jobOrderId: string | null;
+  jdSourceHash: string;
+  payloadVersion: string;
+  status: SparkQuestionBankStatus;
+  questionCountTarget: number;
+  generatedBy: "ai" | "mcp" | "recruiter" | "system";
+  generatedAt: string;
+  approvedByUserId: string | null;
+  approvedAt: string | null;
+  retiredAt: string | null;
+  mcpServerSlug: string | null;
+  mcpToolName: string | null;
+  mcpRunId: string | null;
+  modelName: string | null;
+  promptVersion: string;
+  safetyProfile: string;
+  sourceSnapshot: JsonValue;
+  questions: JsonValue;
+  agentReview: JsonValue;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SparkQuestionBankAuditEvent = {
+  id: string;
+  questionBankId: string;
+  postingId: string;
+  eventType: string;
+  actorType: "recruiter" | "system" | "mcp";
+  actorId: string | null;
+  beforeJson: JsonValue | null;
+  afterJson: JsonValue;
+  createdAt: string;
+};
+
 export type SparkApplication = {
   id: string;
   postingId: string;
@@ -159,6 +199,28 @@ export type SparkPublishedJobListItem = Pick<
   | "currency"
   | "country"
   | "lastSyncedAt"
+>;
+
+export type SparkQuestionBankListItem = Pick<
+  SparkQuestionBank,
+  | "id"
+  | "postingId"
+  | "jdSourceHash"
+  | "status"
+  | "questionCountTarget"
+  | "generatedBy"
+  | "generatedAt"
+  | "approvedByUserId"
+  | "approvedAt"
+  | "mcpServerSlug"
+  | "mcpToolName"
+  | "mcpRunId"
+  | "modelName"
+  | "promptVersion"
+  | "safetyProfile"
+  | "questions"
+  | "agentReview"
+  | "updatedAt"
 >;
 
 export type SparkApplicationPosting = Pick<
@@ -256,6 +318,15 @@ function nowIso() {
 
 function rowId() {
   return crypto.randomUUID();
+}
+
+function missingTable(error: { code?: string; message?: string } | null, tableName: string) {
+  return Boolean(
+    error &&
+      (error.code === "42P01" ||
+        error.code === "PGRST205" ||
+        error.message?.includes(tableName))
+  );
 }
 
 function recordingExtension(contentType: string) {
@@ -384,6 +455,152 @@ export async function getPublishedJobById(
 
   if (error) fail(error, "Unable to load Spark job");
   return data as unknown as SparkJobPosting | null;
+}
+
+export async function listLatestQuestionBanksByPostingIds(
+  postingIds: string[]
+): Promise<SparkQuestionBankListItem[]> {
+  if (!postingIds.length) return [];
+
+  const { data, error } = await getSparkSupabase()
+    .from("SparkQuestionBank")
+    .select(
+      "id,postingId,jdSourceHash,status,questionCountTarget,generatedBy,generatedAt,approvedByUserId,approvedAt,mcpServerSlug,mcpToolName,mcpRunId,modelName,promptVersion,safetyProfile,questions,agentReview,updatedAt"
+    )
+    .in("postingId", postingIds)
+    .order("updatedAt", { ascending: false });
+
+  if (error) {
+    if (missingTable(error, "SparkQuestionBank")) return [];
+    fail(error, "Unable to list Spark question banks");
+  }
+
+  const latestByPostingId = new Map<string, SparkQuestionBankListItem>();
+  ((data || []) as unknown as SparkQuestionBankListItem[]).forEach((bank) => {
+    if (!latestByPostingId.has(bank.postingId)) {
+      latestByPostingId.set(bank.postingId, bank);
+    }
+  });
+
+  return [...latestByPostingId.values()];
+}
+
+export async function getQuestionBankForPosting(
+  postingId: string,
+  questionBankId: string
+): Promise<SparkQuestionBank | null> {
+  const { data, error } = await getSparkSupabase()
+    .from("SparkQuestionBank")
+    .select("*")
+    .eq("postingId", postingId)
+    .eq("id", questionBankId)
+    .maybeSingle();
+
+  if (error) fail(error, "Unable to load Spark question bank");
+  return data as unknown as SparkQuestionBank | null;
+}
+
+export async function retireQuestionBanksForPosting(
+  postingId: string,
+  statuses: SparkQuestionBankStatus[] = ["Draft"]
+) {
+  const { error } = await getSparkSupabase()
+    .from("SparkQuestionBank")
+    .update({
+      status: "Retired",
+      retiredAt: nowIso(),
+      updatedAt: nowIso(),
+    })
+    .eq("postingId", postingId)
+    .in("status", statuses);
+
+  if (error) fail(error, "Unable to retire Spark question banks");
+}
+
+export async function createQuestionBank(
+  values: Omit<Partial<SparkQuestionBank>, "id" | "createdAt" | "updatedAt"> & {
+    postingId: string;
+    jobOrderId: string;
+    jdSourceHash: string;
+    questionCountTarget: number;
+    questions: JsonValue;
+  }
+): Promise<SparkQuestionBank> {
+  const timestamp = nowIso();
+  const { data, error } = await getSparkSupabase()
+    .from("SparkQuestionBank")
+    .insert({
+      id: rowId(),
+      ...values,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    })
+    .select("*")
+    .single();
+
+  if (error) fail(error, "Unable to create Spark question bank");
+  return data as unknown as SparkQuestionBank;
+}
+
+export async function approveQuestionBank(
+  postingId: string,
+  questionBankId: string,
+  approvedByUserId: string
+): Promise<SparkQuestionBank> {
+  const timestamp = nowIso();
+  const supabase = getSparkSupabase();
+  const retireExisting = await supabase
+    .from("SparkQuestionBank")
+    .update({
+      status: "Retired",
+      retiredAt: timestamp,
+      updatedAt: timestamp,
+    })
+    .eq("postingId", postingId)
+    .eq("status", "Approved")
+    .neq("id", questionBankId);
+
+  if (retireExisting.error) {
+    fail(retireExisting.error, "Unable to retire previous approved question bank");
+  }
+
+  const { data, error } = await supabase
+    .from("SparkQuestionBank")
+    .update({
+      status: "Approved",
+      approvedByUserId,
+      approvedAt: timestamp,
+      retiredAt: null,
+      updatedAt: timestamp,
+    })
+    .eq("postingId", postingId)
+    .eq("id", questionBankId)
+    .select("*")
+    .single();
+
+  if (error) fail(error, "Unable to approve Spark question bank");
+  return data as unknown as SparkQuestionBank;
+}
+
+export async function createQuestionBankAuditEvent(
+  values: Omit<
+    Partial<SparkQuestionBankAuditEvent>,
+    "id" | "createdAt"
+  > & {
+    questionBankId: string;
+    postingId: string;
+    eventType: string;
+  }
+) {
+  const { error } = await getSparkSupabase()
+    .from("SparkQuestionBankAuditEvent")
+    .insert({
+      id: rowId(),
+      ...values,
+      createdAt: nowIso(),
+    });
+
+  if (error) fail(error, "Unable to create Spark question bank audit event");
 }
 
 export async function countPublishedJobs() {
@@ -624,12 +841,7 @@ export async function findJobInvitationByPostingAndEmail(
     .maybeSingle();
 
   if (error) {
-    const missingTable =
-      error.code === "42P01" ||
-      error.code === "PGRST205" ||
-      error.message?.includes("SparkJobInvitation");
-
-    if (missingTable) return null;
+    if (missingTable(error, "SparkJobInvitation")) return null;
     fail(error, "Unable to check Spark job invitation");
   }
 

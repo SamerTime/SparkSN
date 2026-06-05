@@ -13,6 +13,7 @@ import { getSparkRecruiterUser } from "@/lib/spark-auth";
 import {
   createInterviewRecordingSignedUrl,
   listApplicationStatuses,
+  listLatestQuestionBanksByPostingIds,
   listPublishedJobs,
   listRecruiterApplications,
   SPARK_INTERVIEW_RECORDINGS_BUCKET,
@@ -95,6 +96,9 @@ export default async function SparkRecruiterPage({
     listApplicationStatuses(),
     listPublishedJobs(),
   ]);
+  const questionBanks = await listLatestQuestionBanksByPostingIds(
+    publishedJobs.map((job) => job.id)
+  );
   const recordingViewsById = new Map(
     await Promise.all(
       applications.map(async (application) => {
@@ -223,6 +227,7 @@ export default async function SparkRecruiterPage({
         <SparkRecruiterWorkspace
           applications={recruiterApplications}
           jobs={publishedJobs}
+          questionBanks={questionBanks}
           initialApplicationId={initialApplicationId}
         />
       </section>

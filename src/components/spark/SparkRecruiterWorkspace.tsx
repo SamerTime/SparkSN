@@ -32,6 +32,7 @@ import { SparkRecruiterActions } from "@/components/spark/SparkRecruiterActions"
 import type {
   SparkApplicationWithRelations,
   SparkPublishedJobListItem,
+  SparkQuestionBankListItem,
 } from "@/lib/spark-db";
 
 type CommunicationEvent = {
@@ -63,7 +64,19 @@ export type SparkRecruiterApplicationView = SparkApplicationWithRelations & {
 type SparkRecruiterWorkspaceProps = {
   applications: SparkRecruiterApplicationView[];
   jobs: SparkPublishedJobListItem[];
+  questionBanks: SparkQuestionBankListItem[];
   initialApplicationId?: string | null;
+};
+
+type QuestionBankQuestion = {
+  id: string;
+  text: string;
+  type: string;
+  source: string;
+  target_seconds: number;
+  rubric: string[];
+  ideal_evidence: string[];
+  red_flags: string[];
 };
 
 type WorkflowStatusOption = {
@@ -121,6 +134,36 @@ function jsonObject(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
+
+function questionBankQuestions(value: unknown): QuestionBankQuestion[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item) => jsonObject(item))
+    .map((item, index) => ({
+      id: typeof item.id === "string" ? item.id : `question-${index + 1}`,
+      text: typeof item.text === "string" ? item.text : "",
+      type: typeof item.type === "string" ? item.type : "role_specific",
+      source: typeof item.source === "string" ? item.source : "question_bank",
+      target_seconds:
+        typeof item.target_seconds === "number" ? item.target_seconds : 20,
+      rubric: stringArray(item.rubric),
+      ideal_evidence: stringArray(item.ideal_evidence),
+      red_flags: stringArray(item.red_flags),
+    }))
+    .filter((item) => item.text);
+}
+
+function questionBankFlags(value: unknown): string[] {
+  const review = jsonObject(value);
+  return stringArray(review.watchdogFlags).slice(0, 3);
 }
 
 function communicationEvents(value: unknown): CommunicationEvent[] {
@@ -220,6 +263,19 @@ function statusClass(status: string) {
     return "border-[var(--sn-coral-100)] bg-[var(--sn-coral-50)] text-[var(--sn-coral-600)]";
   }
   return "border-[var(--sn-line)] bg-white text-[var(--sn-ink-2)]";
+}
+
+function questionBankStatusClass(status?: string) {
+  if (status === "Approved") {
+    return "border-[#bde8ce] bg-[var(--sn-success-50)] text-[var(--sn-success)]";
+  }
+  if (status === "Draft") {
+    return "border-[var(--sn-coral-100)] bg-[var(--sn-coral-50)] text-[var(--sn-coral-600)]";
+  }
+  if (status === "Retired") {
+    return "border-[var(--sn-line)] bg-white text-[var(--sn-muted)]";
+  }
+  return "border-[var(--sn-line)] bg-white text-[var(--sn-muted)]";
 }
 
 function formatStatus(status: string) {
@@ -374,12 +430,17 @@ function buildJobOrders(
 export function SparkRecruiterWorkspace({
   applications,
   jobs,
+  questionBanks,
   initialApplicationId,
 }: SparkRecruiterWorkspaceProps) {
   const router = useRouter();
   const jobOrders = useMemo(
     () => buildJobOrders(jobs, applications),
     [applications, jobs]
+  );
+  const questionBankByPostingId = useMemo(
+    () => new Map(questionBanks.map((bank) => [bank.postingId, bank])),
+    [questionBanks]
   );
   const initialApplication = applications.find(
     (application) => application.id === initialApplicationId
@@ -397,6 +458,10 @@ export function SparkRecruiterWorkspace({
   const [jobInviteOpen, setJobInviteOpen] = useState(false);
   const [jobInviteEmail, setJobInviteEmail] = useState("");
   const [jobInviteSending, setJobInviteSending] = useState(false);
+  const [questionBankOpen, setQuestionBankOpen] = useState(false);
+  const [questionBankLoading, setQuestionBankLoading] = useState<
+    "generate" | "approve" | null
+  >(null);
 
   useEffect(() => {
     if (!selectedPostingId && jobOrders[0]) {
@@ -414,6 +479,9 @@ export function SparkRecruiterWorkspace({
   const selectedApplications = applications.filter(
     (application) => application.postingId === selectedJob?.id
   );
+  const selectedQuestionBank = selectedJob
+    ? questionBankByPostingId.get(selectedJob.id) || null
+    : null;
   const activeApplication =
     applications.find((application) => application.id === activeApplicationId) ||
     null;
@@ -507,6 +575,67 @@ export function SparkRecruiterWorkspace({
       );
     } finally {
       setJobInviteSending(false);
+    }
+  };
+
+  const generateQuestionBank = async () => {
+    if (!selectedJob) return;
+    setQuestionBankLoading("generate");
+
+    try {
+      const response = await fetch(
+        `/api/spark/job-postings/${selectedJob.id}/question-bank/generate`,
+        { method: "POST" }
+      );
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || "Unable to generate question bank.");
+      }
+
+      toast.success("Question bank draft generated.");
+      setQuestionBankOpen(true);
+      router.refresh();
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to generate question bank."
+      );
+    } finally {
+      setQuestionBankLoading(null);
+    }
+  };
+
+  const approveQuestionBank = async () => {
+    if (!selectedJob || !selectedQuestionBank) return;
+    setQuestionBankLoading("approve");
+
+    try {
+      const response = await fetch(
+        `/api/spark/job-postings/${selectedJob.id}/question-bank/approve`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ questionBankId: selectedQuestionBank.id }),
+        }
+      );
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || "Unable to approve question bank.");
+      }
+
+      toast.success("Question bank approved.");
+      router.refresh();
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to approve question bank."
+      );
+    } finally {
+      setQuestionBankLoading(null);
     }
   };
 
@@ -618,6 +747,24 @@ export function SparkRecruiterWorkspace({
                     >
                       <Mail className="h-4 w-4" />
                     </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="border-[var(--sn-line)]"
+                      onClick={() => setQuestionBankOpen((open) => !open)}
+                    >
+                      <ClipboardList className="h-4 w-4" />
+                      Questions
+                      {selectedQuestionBank && (
+                        <span
+                          className={`rounded-full border px-2 py-0.5 text-[11px] font-extrabold ${questionBankStatusClass(
+                            selectedQuestionBank.status
+                          )}`}
+                        >
+                          {selectedQuestionBank.status}
+                        </span>
+                      )}
+                    </Button>
                     {selectedJob?.slug && (
                       <Button asChild variant="outline" className="border-[var(--sn-line)]">
                         <Link href={`/jobs/${selectedJob.slug}`}>
@@ -669,6 +816,15 @@ export function SparkRecruiterWorkspace({
                 </div>
               </div>
             </div>
+
+            {questionBankOpen && selectedJob && (
+              <QuestionBankPanel
+                questionBank={selectedQuestionBank}
+                loading={questionBankLoading}
+                onGenerate={() => void generateQuestionBank()}
+                onApprove={() => void approveQuestionBank()}
+              />
+            )}
 
             {selectedApplications.length === 0 ? (
               <div className="p-8 text-center">
@@ -864,6 +1020,166 @@ function workflowToneClass(option: WorkflowStatusOption, active: boolean) {
   }
 
   return "text-[var(--sn-ink)] hover:bg-[var(--sn-soft)]";
+}
+
+function QuestionBankPanel({
+  questionBank,
+  loading,
+  onGenerate,
+  onApprove,
+}: {
+  questionBank: SparkQuestionBankListItem | null;
+  loading: "generate" | "approve" | null;
+  onGenerate: () => void;
+  onApprove: () => void;
+}) {
+  const questions = questionBankQuestions(questionBank?.questions);
+  const flags = questionBankFlags(questionBank?.agentReview);
+  const canApprove = questionBank?.status === "Draft" && questions.length >= 3;
+
+  return (
+    <div className="border-b border-[var(--sn-line)] bg-[var(--sn-soft)] p-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-extrabold text-[var(--sn-ink)]">
+              Spark question bank
+            </p>
+            <span
+              className={`rounded-full border px-2 py-1 text-xs font-extrabold ${questionBankStatusClass(
+                questionBank?.status
+              )}`}
+            >
+              {questionBank?.status || "Not generated"}
+            </span>
+            {questionBank?.mcpServerSlug && (
+              <span className="sn-chip sn-chip-blue py-1 text-xs">
+                <Sparkles className="h-3.5 w-3.5" />
+                MCP ready
+              </span>
+            )}
+          </div>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--sn-muted)]">
+            Review the JD-driven screening questions for this job order before
+            they are used with candidates.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="border-[var(--sn-line)] bg-white"
+            disabled={Boolean(loading)}
+            onClick={onGenerate}
+          >
+            {loading === "generate" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="h-4 w-4" />
+            )}
+            {questionBank ? "Regenerate draft" : "Generate draft"}
+          </Button>
+          {questionBank?.status === "Draft" && (
+            <Button
+              type="button"
+              className="sn-button-primary"
+              disabled={Boolean(loading) || !canApprove}
+              onClick={onApprove}
+            >
+              {loading === "approve" ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ClipboardList className="h-4 w-4" />
+              )}
+              Approve bank
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {questionBank ? (
+        <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
+          <div className="space-y-3">
+            {questions.map((question, index) => (
+              <div
+                key={question.id}
+                className="rounded-lg border border-[var(--sn-line)] bg-white p-3"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="sn-chip py-1 text-xs">
+                    Q{index + 1}
+                  </span>
+                  <span className="sn-chip sn-chip-blue py-1 text-xs">
+                    {question.type.replace(/_/g, " ")}
+                  </span>
+                  <span className="sn-chip py-1 text-xs">
+                    {question.target_seconds}s
+                  </span>
+                </div>
+                <p className="mt-3 text-sm font-extrabold leading-6 text-[var(--sn-ink)]">
+                  {question.text}
+                </p>
+                <p className="mt-2 text-xs font-bold text-[var(--sn-muted)]">
+                  Source: {question.source}
+                </p>
+                {question.rubric.length > 0 && (
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-xs leading-5 text-[var(--sn-muted)]">
+                    {question.rubric.slice(0, 3).map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <aside className="space-y-3">
+            <div className="rounded-lg border border-[var(--sn-line)] bg-white p-3">
+              <p className="text-xs font-extrabold uppercase text-[var(--sn-muted)]">
+                Agent metadata
+              </p>
+              <dl className="mt-3 space-y-2 text-xs text-[var(--sn-muted)]">
+                <div>
+                  <dt className="font-extrabold text-[var(--sn-ink)]">
+                    MCP server
+                  </dt>
+                  <dd>{questionBank.mcpServerSlug || "Pending"}</dd>
+                </div>
+                <div>
+                  <dt className="font-extrabold text-[var(--sn-ink)]">
+                    Prompt
+                  </dt>
+                  <dd>{questionBank.promptVersion}</dd>
+                </div>
+                <div>
+                  <dt className="font-extrabold text-[var(--sn-ink)]">
+                    Source hash
+                  </dt>
+                  <dd className="break-all">{questionBank.jdSourceHash.slice(0, 24)}</dd>
+                </div>
+              </dl>
+            </div>
+            {flags.length > 0 && (
+              <div className="rounded-lg border border-[var(--sn-coral-100)] bg-white p-3">
+                <p className="text-xs font-extrabold uppercase text-[var(--sn-coral-600)]">
+                  Watchdog flags
+                </p>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-xs leading-5 text-[var(--sn-muted)]">
+                  {flags.map((flag) => (
+                    <li key={flag}>{flag}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </aside>
+        </div>
+      ) : (
+        <div className="mt-4 rounded-lg border border-dashed border-[var(--sn-line)] bg-white p-5 text-sm leading-6 text-[var(--sn-muted)]">
+          No question bank exists for this job order yet.
+        </div>
+      )}
+    </div>
+  );
 }
 
 function WorkflowStatusMenu({
