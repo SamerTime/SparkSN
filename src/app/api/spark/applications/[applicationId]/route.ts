@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getSparkRecruiterUser } from "@/lib/spark-auth";
 import {
+  deleteApplicationSubmission,
+  getApplicationForDeletion,
   getApplicationForRecruiterAction,
   type JsonValue,
   type SparkApplicationStatus,
@@ -332,6 +335,58 @@ export async function PATCH(
     console.error("Spark recruiter action error:", error);
     return NextResponse.json(
       { success: false, error: "Unable to update the Spark application." },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ applicationId: string }> }
+) {
+  try {
+    const recruiter = await getSparkRecruiterUser();
+    if (!recruiter) {
+      return NextResponse.json(
+        { success: false, error: "Recruiter login required." },
+        { status: 401 }
+      );
+    }
+
+    const { applicationId } = await params;
+    const body = await request.json().catch(() => ({}));
+    const note = stringValue(body.note);
+
+    if (note.length < 3) {
+      return NextResponse.json(
+        { success: false, error: "A deletion note is required." },
+        { status: 400 }
+      );
+    }
+
+    const application = await getApplicationForDeletion(applicationId);
+    if (!application) {
+      return NextResponse.json(
+        { success: false, error: "Application not found." },
+        { status: 404 }
+      );
+    }
+
+    const deletion = await deleteApplicationSubmission({
+      application,
+      note,
+      deletedByUserId: recruiter.id,
+      deletedByEmail: recruiter.email,
+    });
+
+    return NextResponse.json({
+      success: true,
+      deletion,
+    });
+  } catch (error) {
+    console.error("Spark application deletion error:", error);
+    return NextResponse.json(
+      { success: false, error: "Unable to delete the Spark application." },
       { status: 500 }
     );
   }

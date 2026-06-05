@@ -134,6 +134,21 @@ export type SparkQuestionBankAuditEvent = {
   createdAt: string;
 };
 
+export type SparkApplicationDeletionLog = {
+  id: string;
+  applicationId: string;
+  postingId: string | null;
+  candidateId: string | null;
+  candidateEmail: string | null;
+  candidateName: string | null;
+  applicationStatus: string | null;
+  note: string;
+  deletedByUserId: string | null;
+  deletedByEmail: string | null;
+  snapshot: JsonValue;
+  deletedAt: string;
+};
+
 export type SparkApplication = {
   id: string;
   postingId: string;
@@ -183,6 +198,17 @@ export type SparkInterviewSessionApplication = SparkApplication & {
   candidate: Pick<
     SparkCandidateProfile,
     "firstName" | "lastName" | "email" | "phone" | "city" | "state"
+  > | null;
+};
+
+export type SparkApplicationDeletionSnapshot = SparkApplication & {
+  posting: Pick<
+    SparkJobPosting,
+    "id" | "title" | "slug" | "clientName" | "sourceEntityId" | "sourceEntityType"
+  > | null;
+  candidate: Pick<
+    SparkCandidateProfile,
+    "id" | "firstName" | "lastName" | "email" | "phone" | "city" | "state" | "country"
   > | null;
 };
 
@@ -983,6 +1009,101 @@ export async function getApplicationForRecruiterAction(
     ...data,
     posting: postingResponse.data || null,
   } as unknown as SparkRecruiterActionApplication;
+}
+
+export async function getApplicationForDeletion(
+  applicationId: string
+): Promise<SparkApplicationDeletionSnapshot | null> {
+  const supabase = getSparkSupabase();
+  const { data, error } = await supabase
+    .from("SparkApplication")
+    .select("*")
+    .eq("id", applicationId)
+    .maybeSingle();
+
+  if (error) fail(error, "Unable to load Spark application for deletion");
+  if (!data) return null;
+
+  const postingResponse = await supabase
+    .from("SparkJobPosting")
+    .select("id,title,slug,clientName,sourceEntityId,sourceEntityType")
+    .eq("id", data.postingId)
+    .maybeSingle();
+
+  if (postingResponse.error) {
+    fail(postingResponse.error, "Unable to load Spark deletion posting");
+  }
+
+  const candidateResponse = data.candidateId
+    ? await supabase
+        .from("SparkCandidateProfile")
+        .select("id,firstName,lastName,email,phone,city,state,country")
+        .eq("id", data.candidateId)
+        .maybeSingle()
+    : { data: null, error: null };
+
+  if (candidateResponse.error) {
+    fail(candidateResponse.error, "Unable to load Spark deletion candidate");
+  }
+
+  return {
+    ...data,
+    posting: postingResponse.data || null,
+    candidate: candidateResponse.data || null,
+  } as unknown as SparkApplicationDeletionSnapshot;
+}
+
+export async function deleteApplicationSubmission({
+  application,
+  note,
+  deletedByUserId,
+  deletedByEmail,
+}: {
+  application: SparkApplicationDeletionSnapshot;
+  note: string;
+  deletedByUserId: string | null;
+  deletedByEmail: string | null;
+}) {
+  const supabase = getSparkSupabase();
+  const snapshot = {
+    application,
+    deletedReason: note,
+  } as unknown as JsonValue;
+  const logResponse = await supabase
+    .from("SparkApplicationDeletionLog")
+    .insert({
+      id: rowId(),
+      applicationId: application.id,
+      postingId: application.postingId,
+      candidateId: application.candidateId,
+      candidateEmail: application.candidateEmail || application.candidate?.email,
+      candidateName: application.candidateName,
+      applicationStatus: application.status,
+      note,
+      deletedByUserId,
+      deletedByEmail,
+      snapshot,
+      deletedAt: nowIso(),
+    })
+    .select("id")
+    .single();
+
+  if (logResponse.error) {
+    fail(logResponse.error, "Unable to log Spark application deletion");
+  }
+
+  const deleteResponse = await supabase
+    .from("SparkApplication")
+    .delete()
+    .eq("id", application.id);
+
+  if (deleteResponse.error) {
+    fail(deleteResponse.error, "Unable to delete Spark application");
+  }
+
+  return {
+    deletionLogId: logResponse.data?.id as string,
+  };
 }
 
 export async function listRecruiterApplications() {

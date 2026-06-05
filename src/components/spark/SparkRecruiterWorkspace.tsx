@@ -19,6 +19,7 @@ import {
   Send,
   ShieldAlert,
   Sparkles,
+  Trash2,
   UserRound,
   Video,
   X,
@@ -462,6 +463,10 @@ export function SparkRecruiterWorkspace({
   const [questionBankLoading, setQuestionBankLoading] = useState<
     "generate" | "approve" | null
   >(null);
+  const [deleteTargetApplication, setDeleteTargetApplication] =
+    useState<SparkRecruiterApplicationView | null>(null);
+  const [deleteNote, setDeleteNote] = useState("");
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => {
     if (!selectedPostingId && jobOrders[0]) {
@@ -636,6 +641,62 @@ export function SparkRecruiterWorkspace({
       );
     } finally {
       setQuestionBankLoading(null);
+    }
+  };
+
+  const openDeleteSubmission = (application: SparkRecruiterApplicationView) => {
+    setOpenMenuApplicationId(null);
+    setDeleteTargetApplication(application);
+    setDeleteNote("");
+  };
+
+  const closeDeleteSubmission = () => {
+    if (deleteLoading) return;
+    setDeleteTargetApplication(null);
+    setDeleteNote("");
+  };
+
+  const deleteSubmission = async () => {
+    if (!deleteTargetApplication) return;
+
+    const note = deleteNote.trim();
+    if (note.length < 3) {
+      toast.error("Add a short note before deleting this submission.");
+      return;
+    }
+
+    setDeleteLoading(true);
+
+    try {
+      const response = await fetch(
+        `/api/spark/applications/${deleteTargetApplication.id}`,
+        {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ note }),
+        }
+      );
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || "Unable to delete submission.");
+      }
+
+      toast.success("Submission deleted.");
+      if (activeApplicationId === deleteTargetApplication.id) {
+        closeApplication();
+      }
+      setDeleteTargetApplication(null);
+      setDeleteNote("");
+      router.refresh();
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to delete submission."
+      );
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -961,6 +1022,7 @@ export function SparkRecruiterWorkspace({
                         }
                         onClose={() => setOpenMenuApplicationId(null)}
                         onRun={(option) => runWorkflowAction(application, option)}
+                        onDelete={() => openDeleteSubmission(application)}
                       />
                     </div>
                   );
@@ -975,6 +1037,17 @@ export function SparkRecruiterWorkspace({
         <CandidateDetailDrawer
           application={activeApplication}
           onClose={closeApplication}
+        />
+      )}
+
+      {deleteTargetApplication && (
+        <DeleteSubmissionDialog
+          application={deleteTargetApplication}
+          note={deleteNote}
+          loading={deleteLoading}
+          onNoteChange={setDeleteNote}
+          onCancel={closeDeleteSubmission}
+          onConfirm={() => void deleteSubmission()}
         />
       )}
     </>
@@ -1189,6 +1262,7 @@ function WorkflowStatusMenu({
   onToggle,
   onClose,
   onRun,
+  onDelete,
 }: {
   application: SparkRecruiterApplicationView;
   isOpen: boolean;
@@ -1196,6 +1270,7 @@ function WorkflowStatusMenu({
   onToggle: () => void;
   onClose: () => void;
   onRun: (option: WorkflowStatusOption) => void;
+  onDelete: () => void;
 }) {
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -1306,6 +1381,16 @@ function WorkflowStatusMenu({
                 </button>
               );
             })}
+            <div className="my-1 border-t border-[var(--sn-line)]" />
+            <button
+              type="button"
+              className="flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm font-bold text-[var(--sn-danger)] hover:bg-[var(--sn-danger-50)]"
+              disabled={Boolean(loadingWorkflowId)}
+              onClick={onDelete}
+            >
+              <span>Delete submission</span>
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
           </div>,
           document.body
         )
@@ -1329,6 +1414,103 @@ function WorkflowStatusMenu({
       </Button>
 
       {menu}
+    </div>
+  );
+}
+
+function DeleteSubmissionDialog({
+  application,
+  note,
+  loading,
+  onNoteChange,
+  onCancel,
+  onConfirm,
+}: {
+  application: SparkRecruiterApplicationView;
+  note: string;
+  loading: boolean;
+  onNoteChange: (value: string) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const name = candidateName(application);
+
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
+      <button
+        type="button"
+        aria-label="Cancel delete submission"
+        className="absolute inset-0 bg-slate-950/45"
+        onClick={onCancel}
+      />
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delete-submission-title"
+        className="relative w-full max-w-lg rounded-lg border border-[var(--sn-line)] bg-white p-5 shadow-2xl"
+      >
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--sn-danger-50)] text-[var(--sn-danger)]">
+            <Trash2 className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <h2
+              id="delete-submission-title"
+              className="text-lg font-extrabold text-[var(--sn-ink)]"
+            >
+              Delete this submission?
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-[var(--sn-muted)]">
+              This removes {name} from the Spark review queue for{" "}
+              <span className="font-bold text-[var(--sn-ink)]">
+                {application.posting.title}
+              </span>
+              . The note and a snapshot will be kept in the deletion log.
+            </p>
+          </div>
+        </div>
+
+        <label
+          htmlFor="spark-delete-submission-note"
+          className="mt-5 block text-xs font-extrabold uppercase text-[var(--sn-muted)]"
+        >
+          Deletion note
+        </label>
+        <textarea
+          id="spark-delete-submission-note"
+          value={note}
+          onChange={(event) => onNoteChange(event.target.value)}
+          disabled={loading}
+          rows={4}
+          placeholder="Example: duplicate test submission, invalid test data, cleanup requested..."
+          className="mt-2 w-full resize-none rounded-md border border-[var(--sn-line)] bg-white px-3 py-2 text-sm leading-6 text-[var(--sn-ink)] outline-none transition focus:border-[var(--sn-blue)] focus:ring-2 focus:ring-[var(--sn-blue-100)] disabled:opacity-60"
+        />
+
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            className="border-[var(--sn-line)]"
+            disabled={loading}
+            onClick={onCancel}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            className="bg-[var(--sn-danger)] text-white hover:bg-[var(--sn-danger)]/90"
+            disabled={loading || note.trim().length < 3}
+            onClick={onConfirm}
+          >
+            {loading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Trash2 className="h-4 w-4" />
+            )}
+            Delete submission
+          </Button>
+        </div>
+      </section>
     </div>
   );
 }
