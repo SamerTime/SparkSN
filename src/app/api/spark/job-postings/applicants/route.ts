@@ -104,7 +104,8 @@ function recruiterDecision(status: SparkApplicationStatus) {
   if (status === "Complete" || status === "InterviewCompleted") return "complete";
   if (status === "Reviewing" || status === "RecruiterReview") return "reviewing";
   if (status === "InProcess" || status === "InterviewStarted") return "in_process";
-  if (status === "Invited" || status === "InterviewInvited") return "invited";
+  if (status === "Invited") return "invited_to_apply";
+  if (status === "InterviewInvited") return "interview_invited";
   if (status === "RecruiterApproved") return "approved";
   return null;
 }

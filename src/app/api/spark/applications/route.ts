@@ -2,9 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   createApplication,
   findApplicationByPostingAndEmail,
+  findJobInvitationByPostingAndEmail,
   getPublishedPostingForApplication,
   type JsonValue,
+  type SparkApplicationStatus,
   updateApplication,
+  updateJobInvitation,
   upsertCandidateProfileByEmail,
 } from "@/lib/spark-db";
 
@@ -43,11 +46,29 @@ function appendCommunicationEvents(
       plannedTemplates: [
         "spark_application_received",
         "spark_recruiter_review_needed",
+        "spark_job_apply_invite",
         "spark_interview_invite",
       ],
     },
     events: [...existingEvents, ...events],
   };
+}
+
+const EARLY_APPLICATION_STATUSES = new Set<SparkApplicationStatus>([
+  "ProfileStarted",
+  "Applied",
+  "Invited",
+]);
+
+function applicationStatusForApply(
+  existingStatus: SparkApplicationStatus | undefined,
+  invited: boolean
+): SparkApplicationStatus {
+  if (existingStatus && !EARLY_APPLICATION_STATUSES.has(existingStatus)) {
+    return existingStatus;
+  }
+
+  return invited ? "Invited" : "Applied";
 }
 
 function locationReviewReason(status: string, captured: boolean) {
@@ -186,6 +207,11 @@ export async function POST(request: NextRequest) {
       posting.id,
       email
     );
+    const invitation = await findJobInvitationByPostingAndEmail(posting.id, email);
+    const applicationStatus = applicationStatusForApply(
+      existingApplication?.status,
+      Boolean(invitation)
+    );
 
     const candidateName = `${firstName} ${lastName}`;
     const locationSignals: JsonValue = {
@@ -228,6 +254,18 @@ export async function POST(request: NextRequest) {
           messagePreview:
             "Thanks for applying. A recruiter will review your profile before the short interview step.",
         },
+        ...(invitation
+          ? [
+              {
+                type: "invited_candidate_applied",
+                label: "Invited candidate applied",
+                at: now,
+                channel: "internal",
+                messagePreview:
+                  "Candidate applied after receiving a recruiter invitation for this job order.",
+              },
+            ]
+          : []),
         {
           type: "recruiter_review_queued",
           label: "Recruiter review queued",
@@ -246,7 +284,7 @@ export async function POST(request: NextRequest) {
           candidateEmail: email,
           candidateName,
           candidatePhone: phone,
-          status: "Applied",
+          status: applicationStatus,
           communicationState: communicationState as JsonValue,
           deviceSignals,
           locationSignals,
@@ -257,11 +295,34 @@ export async function POST(request: NextRequest) {
           candidateEmail: email,
           candidateName,
           candidatePhone: phone,
-          status: "Applied",
+          status: applicationStatus,
           communicationState: communicationState as JsonValue,
           deviceSignals,
           locationSignals,
         });
+
+    if (invitation) {
+      const invitationCommunicationState = appendCommunicationEvents(
+        invitation.communicationState,
+        [
+          {
+            type: "job_apply_invite_accepted",
+            label: "Apply invite accepted",
+            at: now,
+            channel: "internal",
+            messagePreview:
+              "Candidate submitted the Spark application from a recruiter invitation.",
+            applicationId: application.id,
+          },
+        ],
+        preferredChannel
+      );
+
+      await updateJobInvitation(invitation.id, {
+        status: "Applied",
+        communicationState: invitationCommunicationState as JsonValue,
+      });
+    }
 
     return NextResponse.json({
       success: true,

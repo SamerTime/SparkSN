@@ -82,6 +82,18 @@ export type SparkCandidateProfile = {
   updatedAt: string;
 };
 
+export type SparkJobInvitation = {
+  id: string;
+  postingId: string;
+  email: string;
+  inviteUrl: string;
+  status: string;
+  invitedBy: string | null;
+  communicationState: JsonValue;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type SparkApplication = {
   id: string;
   postingId: string;
@@ -156,7 +168,7 @@ export type SparkApplicationPosting = Pick<
 
 export type SparkExistingApplication = Pick<
   SparkApplication,
-  "id" | "communicationState"
+  "id" | "status" | "communicationState"
 >;
 
 export type SparkApplicationWriteResult = Pick<
@@ -353,6 +365,20 @@ export async function getPublishedJobBySlug(
     .from("SparkJobPosting")
     .select("*")
     .eq("slug", slug)
+    .eq("status", "Published")
+    .maybeSingle();
+
+  if (error) fail(error, "Unable to load Spark job");
+  return data as unknown as SparkJobPosting | null;
+}
+
+export async function getPublishedJobById(
+  postingId: string
+): Promise<SparkJobPosting | null> {
+  const { data, error } = await getSparkSupabase()
+    .from("SparkJobPosting")
+    .select("*")
+    .eq("id", postingId)
     .eq("status", "Published")
     .maybeSingle();
 
@@ -577,13 +603,105 @@ export async function findApplicationByPostingAndEmail(
 ): Promise<SparkExistingApplication | null> {
   const { data, error } = await getSparkSupabase()
     .from("SparkApplication")
-    .select("id,communicationState")
+    .select("id,status,communicationState")
     .eq("postingId", postingId)
     .eq("candidateEmail", candidateEmail)
     .maybeSingle();
 
   if (error) fail(error, "Unable to check existing Spark application");
   return data as unknown as SparkExistingApplication | null;
+}
+
+export async function findJobInvitationByPostingAndEmail(
+  postingId: string,
+  email: string
+): Promise<Pick<SparkJobInvitation, "id" | "communicationState"> | null> {
+  const { data, error } = await getSparkSupabase()
+    .from("SparkJobInvitation")
+    .select("id,communicationState")
+    .eq("postingId", postingId)
+    .eq("email", email)
+    .maybeSingle();
+
+  if (error) {
+    const missingTable =
+      error.code === "42P01" ||
+      error.code === "PGRST205" ||
+      error.message?.includes("SparkJobInvitation");
+
+    if (missingTable) return null;
+    fail(error, "Unable to check Spark job invitation");
+  }
+
+  return data as unknown as Pick<SparkJobInvitation, "id" | "communicationState"> | null;
+}
+
+export async function upsertJobInvitation(
+  values: Omit<
+    Partial<SparkJobInvitation>,
+    "id" | "createdAt" | "updatedAt"
+  > & {
+    postingId: string;
+    email: string;
+    inviteUrl: string;
+  }
+): Promise<Pick<SparkJobInvitation, "id" | "email" | "status">> {
+  const supabase = getSparkSupabase();
+  const timestamp = nowIso();
+  const existing = await supabase
+    .from("SparkJobInvitation")
+    .select("id")
+    .eq("postingId", values.postingId)
+    .eq("email", values.email)
+    .maybeSingle();
+
+  if (existing.error) {
+    fail(existing.error, "Unable to check Spark job invitation");
+  }
+
+  if (existing.data) {
+    const { data, error } = await supabase
+      .from("SparkJobInvitation")
+      .update({
+        ...values,
+        updatedAt: timestamp,
+      })
+      .eq("id", existing.data.id)
+      .select("id,email,status")
+      .single();
+
+    if (error) fail(error, "Unable to update Spark job invitation");
+    return data as unknown as Pick<SparkJobInvitation, "id" | "email" | "status">;
+  }
+
+  const { data, error } = await supabase
+    .from("SparkJobInvitation")
+    .insert({
+      id: rowId(),
+      ...values,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    })
+    .select("id,email,status")
+    .single();
+
+  if (error) fail(error, "Unable to create Spark job invitation");
+  return data as unknown as Pick<SparkJobInvitation, "id" | "email" | "status">;
+}
+
+export async function updateJobInvitation(
+  invitationId: string,
+  values: Omit<Partial<SparkJobInvitation>, "id" | "createdAt" | "updatedAt">
+) {
+  const { error } = await getSparkSupabase()
+    .from("SparkJobInvitation")
+    .update({
+      ...values,
+      updatedAt: nowIso(),
+    })
+    .eq("id", invitationId);
+
+  if (error) fail(error, "Unable to update Spark job invitation");
 }
 
 export async function createApplication(

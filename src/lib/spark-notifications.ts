@@ -12,6 +12,14 @@ type SparkInterviewInviteInput = {
   interviewUrl: string;
 };
 
+type SparkApplyInviteInput = {
+  postingId: string;
+  recipientEmail: string;
+  jobTitle: string;
+  clientName?: string | null;
+  applyUrl: string;
+};
+
 export type SparkNotificationSendResult =
   | {
       ok: true;
@@ -113,20 +121,69 @@ function buildInterviewInviteContent(input: SparkInterviewInviteInput) {
   return { subject, text, html };
 }
 
-export async function sendSparkInterviewInvite(
-  input: SparkInterviewInviteInput
-): Promise<SparkNotificationSendResult> {
-  const recipientEmail = cleanText(input.recipientEmail);
-  if (!recipientEmail) {
-    return { ok: false, errorCode: "missing_recipient_email" };
-  }
+function buildApplyInviteContent(input: SparkApplyInviteInput) {
+  const clientLine = cleanText(input.clientName)
+    ? ` with ${cleanText(input.clientName)}`
+    : "";
+  const subject = `You're invited to apply: ${input.jobTitle}`;
+  const text = [
+    "Hi there,",
+    "",
+    `A StaffingNation recruiter invited you to apply for ${input.jobTitle}${clientLine}.`,
+    "",
+    "What to expect:",
+    "- Review the job details before applying.",
+    "- Create or update your Spark profile.",
+    "- A recruiter will review your fit before any interview step.",
+    "",
+    `Apply here: ${input.applyUrl}`,
+    "",
+    "Thank you,",
+    "StaffingNation Spark",
+  ].join("\n");
 
+  const html = `
+    <div style="font-family:Arial,Helvetica,sans-serif;color:#172033;line-height:1.55">
+      <p>Hi there,</p>
+      <p>
+        A StaffingNation recruiter invited you to apply for
+        <strong>${escapeHtml(input.jobTitle)}</strong>${escapeHtml(clientLine)}.
+      </p>
+      <p><strong>What to expect:</strong></p>
+      <ul>
+        <li>Review the job details before applying.</li>
+        <li>Create or update your Spark profile.</li>
+        <li>A recruiter will review your fit before any interview step.</li>
+      </ul>
+      <p>
+        <a href="${escapeHtml(input.applyUrl)}" style="color:#2563eb;font-weight:700">
+          Apply for this job
+        </a>
+      </p>
+      <p>Thank you,<br />StaffingNation Spark</p>
+    </div>
+  `;
+
+  return { subject, text, html };
+}
+
+async function sendCourierEmail({
+  recipientEmail,
+  subject,
+  text,
+  html,
+  data,
+}: {
+  recipientEmail: string;
+  subject: string;
+  text: string;
+  html: string;
+  data: Record<string, unknown>;
+}): Promise<SparkNotificationSendResult> {
   const config = courierConfig();
   if (!config.token) {
     return { ok: false, errorCode: "missing_courier_auth_token" };
   }
-
-  const content = buildInterviewInviteContent(input);
 
   try {
     const response = await fetch(COURIER_API_URL, {
@@ -140,21 +197,17 @@ export async function sendSparkInterviewInvite(
         message: {
           to: { email: recipientEmail },
           content: {
-            title: content.subject,
-            body: content.text,
+            title: subject,
+            body: text,
           },
-          data: {
-            applicationId: input.applicationId,
-            jobTitle: input.jobTitle,
-            interviewUrl: input.interviewUrl,
-          },
+          data,
           channels: {
             email: {
               override: {
                 from: config.from,
-                subject: content.subject,
-                html: content.html,
-                text: content.text,
+                subject,
+                html,
+                text,
                 tracking: {
                   open: false,
                 },
@@ -208,4 +261,48 @@ export async function sendSparkInterviewInvite(
           : "courier_exception",
     };
   }
+}
+
+export async function sendSparkInterviewInvite(
+  input: SparkInterviewInviteInput
+): Promise<SparkNotificationSendResult> {
+  const recipientEmail = cleanText(input.recipientEmail);
+  if (!recipientEmail) {
+    return { ok: false, errorCode: "missing_recipient_email" };
+  }
+
+  const content = buildInterviewInviteContent(input);
+  return sendCourierEmail({
+    recipientEmail,
+    subject: content.subject,
+    text: content.text,
+    html: content.html,
+    data: {
+      applicationId: input.applicationId,
+      jobTitle: input.jobTitle,
+      interviewUrl: input.interviewUrl,
+    },
+  });
+}
+
+export async function sendSparkApplyInvite(
+  input: SparkApplyInviteInput
+): Promise<SparkNotificationSendResult> {
+  const recipientEmail = cleanText(input.recipientEmail);
+  if (!recipientEmail) {
+    return { ok: false, errorCode: "missing_recipient_email" };
+  }
+
+  const content = buildApplyInviteContent(input);
+  return sendCourierEmail({
+    recipientEmail,
+    subject: content.subject,
+    text: content.text,
+    html: content.html,
+    data: {
+      postingId: input.postingId,
+      jobTitle: input.jobTitle,
+      applyUrl: input.applyUrl,
+    },
+  });
 }

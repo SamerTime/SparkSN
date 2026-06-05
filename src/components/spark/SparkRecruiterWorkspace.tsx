@@ -15,6 +15,7 @@ import {
   MoreVertical,
   PanelRightOpen,
   Phone,
+  Send,
   ShieldAlert,
   Sparkles,
   UserRound,
@@ -24,6 +25,7 @@ import {
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { SparkInitials } from "@/components/spark/SparkBrand";
 import { SparkRecruiterActions } from "@/components/spark/SparkRecruiterActions";
 import type {
@@ -71,11 +73,6 @@ type WorkflowStatusOption = {
 };
 
 const WORKFLOW_STATUS_OPTIONS: WorkflowStatusOption[] = [
-  {
-    label: "Invited",
-    action: "invite_interview",
-    tone: "primary",
-  },
   {
     label: "In Process",
     status: "InProcess",
@@ -228,7 +225,7 @@ function formatStatus(status: string) {
   const labels: Record<string, string> = {
     ProfileStarted: "Profile Started",
     RecruiterApproved: "Approved",
-    InterviewInvited: "Invited",
+    InterviewInvited: "Interview Invited",
     InProcess: "In Process",
     InterviewStarted: "In Process",
     Complete: "Complete",
@@ -311,7 +308,8 @@ function candidateLocation(application: SparkRecruiterApplicationView) {
 function interviewLabel(application: SparkRecruiterApplicationView) {
   if (application.status === "Complete" || application.status === "InterviewCompleted") return "Complete";
   if (application.status === "InProcess" || application.status === "InterviewStarted") return "In process";
-  if (application.status === "Invited" || application.status === "InterviewInvited") return "Invited";
+  if (application.status === "InterviewInvited") return "Interview invited";
+  if (application.status === "Invited") return "Invited to apply";
   if (application.status === "Reviewing" || application.status === "RecruiterReview") return "Reviewing";
   if (application.status === "Shortlisted" || application.status === "Vetted") return "Shortlist";
   if (application.status === "Offer") return "Offer";
@@ -395,12 +393,20 @@ export function SparkRecruiterWorkspace({
     null
   );
   const [loadingWorkflowId, setLoadingWorkflowId] = useState<string | null>(null);
+  const [jobInviteOpen, setJobInviteOpen] = useState(false);
+  const [jobInviteEmail, setJobInviteEmail] = useState("");
+  const [jobInviteSending, setJobInviteSending] = useState(false);
 
   useEffect(() => {
     if (!selectedPostingId && jobOrders[0]) {
       setSelectedPostingId(jobOrders[0].id);
     }
   }, [jobOrders, selectedPostingId]);
+
+  useEffect(() => {
+    setJobInviteOpen(false);
+    setJobInviteEmail("");
+  }, [selectedPostingId]);
 
   const selectedJob =
     jobOrders.find((job) => job.id === selectedPostingId) || jobOrders[0];
@@ -459,6 +465,47 @@ export function SparkRecruiterWorkspace({
       );
     } finally {
       setLoadingWorkflowId(null);
+    }
+  };
+
+  const sendJobApplyInvite = async () => {
+    if (!selectedJob) return;
+
+    const email = jobInviteEmail.trim().toLowerCase();
+    if (!email || !email.includes("@")) {
+      toast.error("Enter a valid email address.");
+      return;
+    }
+
+    setJobInviteSending(true);
+
+    try {
+      const response = await fetch(
+        `/api/spark/job-postings/${selectedJob.id}/invite`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        }
+      );
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || "Unable to send the job invitation.");
+      }
+
+      toast.success(`Invitation sent to ${email}.`);
+      setJobInviteEmail("");
+      setJobInviteOpen(false);
+      router.refresh();
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to send the job invitation."
+      );
+    } finally {
+      setJobInviteSending(false);
     }
   };
 
@@ -558,14 +605,67 @@ export function SparkRecruiterWorkspace({
                     )}
                   </div>
                 </div>
-                {selectedJob?.slug && (
-                  <Button asChild variant="outline" className="border-[var(--sn-line)]">
-                    <Link href={`/jobs/${selectedJob.slug}`}>
-                      Public job
-                      <ArrowRight className="h-4 w-4" />
-                    </Link>
-                  </Button>
-                )}
+                <div className="flex flex-col gap-2 md:items-end">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="border-[var(--sn-line)]"
+                      title="Invite by email"
+                      onClick={() => setJobInviteOpen((open) => !open)}
+                    >
+                      <Mail className="h-4 w-4" />
+                    </Button>
+                    {selectedJob?.slug && (
+                      <Button asChild variant="outline" className="border-[var(--sn-line)]">
+                        <Link href={`/jobs/${selectedJob.slug}`}>
+                          Public job
+                          <ArrowRight className="h-4 w-4" />
+                        </Link>
+                      </Button>
+                    )}
+                  </div>
+                  {jobInviteOpen && (
+                    <form
+                      className="w-full rounded-lg border border-[var(--sn-line)] bg-[var(--sn-soft)] p-3 md:w-[360px]"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void sendJobApplyInvite();
+                      }}
+                    >
+                      <label
+                        htmlFor="spark-job-invite-email"
+                        className="text-xs font-extrabold uppercase text-[var(--sn-muted)]"
+                      >
+                        Invite to apply
+                      </label>
+                      <div className="mt-2 flex gap-2">
+                        <Input
+                          id="spark-job-invite-email"
+                          type="email"
+                          value={jobInviteEmail}
+                          onChange={(event) => setJobInviteEmail(event.target.value)}
+                          placeholder="candidate@email.com"
+                          className="bg-white"
+                          disabled={jobInviteSending}
+                        />
+                        <Button
+                          type="submit"
+                          size="icon"
+                          disabled={jobInviteSending}
+                          title="Send invitation"
+                        >
+                          {jobInviteSending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Send className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </div>
+                    </form>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -724,10 +824,6 @@ export function SparkRecruiterWorkspace({
 }
 
 function workflowOptionActive(status: string, option: WorkflowStatusOption) {
-  if (option.action === "invite_interview") {
-    return status === "Invited" || status === "InterviewInvited";
-  }
-
   if (option.status === "InProcess") {
     return status === "InProcess" || status === "InterviewStarted";
   }

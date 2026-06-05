@@ -59,14 +59,6 @@ const ACTIONS: Record<string, ActionConfig> = {
 };
 
 const WORKFLOW_STATUSES: Record<string, ActionConfig> = {
-  Invited: {
-    status: "Invited",
-    eventType: "candidate_invited",
-    label: "Candidate invited",
-    channel: "internal",
-    messagePreview:
-      "Candidate moved to Invited for this Spark job order.",
-  },
   InProcess: {
     status: "InProcess",
     eventType: "candidate_in_process",
@@ -147,6 +139,7 @@ function appendEvent(
       plannedTemplates: [
         "spark_application_received",
         "spark_recruiter_review_needed",
+        "spark_job_apply_invite",
         "spark_interview_invite",
         "spark_candidate_decline",
       ],
