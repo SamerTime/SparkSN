@@ -10,6 +10,7 @@ import {
   PhoneOff,
   Play,
   Send,
+  SwitchCamera,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ type SparkInterviewSessionProps = {
 };
 
 type InterviewPhase = "ready" | "active" | "completed";
+type CameraFacing = "user" | "environment";
 
 type Answer = {
   question: string;
@@ -48,7 +50,10 @@ const RECORDING_MIME_TYPES = [
   "video/webm;codecs=vp9,opus",
   "video/webm;codecs=vp8,opus",
   "video/webm",
+  "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
+  "video/mp4",
 ];
+const RECORDING_CHUNK_MS = 6_000;
 
 function browserSignals() {
   return {
@@ -72,6 +77,28 @@ function getRecordingMimeType() {
 
 function storageContentType(mimeType: string) {
   return mimeType.split(";")[0] || "video/webm";
+}
+
+function formatTimer(seconds: number) {
+  const minutes = Math.floor(seconds / 60);
+  const remaining = seconds % 60;
+  return `${minutes}:${remaining.toString().padStart(2, "0")}`;
+}
+
+function mediaConstraints(facingMode: CameraFacing): MediaStreamConstraints {
+  return {
+    video: {
+      facingMode,
+      width: { ideal: 720 },
+      height: { ideal: 1280 },
+      frameRate: { ideal: 15, max: 24 },
+    },
+    audio: {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+    },
+  };
 }
 
 function getBrowserSupabase() {
@@ -102,8 +129,20 @@ export function SparkInterviewSession({
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const chunkUploadsRef = useRef<
+    Array<{
+      bucket: string;
+      path: string;
+      sizeBytes: number;
+      mimeType: string;
+      uploadedAt: string;
+    }>
+  >([]);
+  const pendingChunkUploadsRef = useRef<Promise<void>[]>([]);
+  const failedChunkUploadsRef = useRef(0);
   const startedAtRef = useRef<number | null>(null);
   const captureRef = useRef<RecordingCapture | null>(null);
+  const timerRef = useRef<number | null>(null);
 
   const [phase, setPhase] = useState<InterviewPhase>(
     initialStatus === "completed" || initialStatus === "InterviewCompleted"
@@ -111,6 +150,14 @@ export function SparkInterviewSession({
       : "ready"
   );
   const [loading, setLoading] = useState(false);
+  const [previewReady, setPreviewReady] = useState(false);
+  const [cameraFacing, setCameraFacing] = useState<CameraFacing>("user");
+  const [recordingElapsed, setRecordingElapsed] = useState(0);
+  const [backgroundUpload, setBackgroundUpload] = useState({
+    uploadedChunks: 0,
+    pendingChunks: 0,
+    failedChunks: 0,
+  });
   const [questionIndex, setQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Answer[]>([]);
   const [currentAnswer, setCurrentAnswer] = useState("");
@@ -127,13 +174,130 @@ export function SparkInterviewSession({
   useEffect(() => {
     return () => {
       streamRef.current?.getTracks().forEach((track) => track.stop());
+      if (timerRef.current) window.clearInterval(timerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+    }
+  }, [phase, previewReady]);
 
   const attachStream = (stream: MediaStream) => {
     streamRef.current = stream;
     if (videoRef.current) {
       videoRef.current.srcObject = stream;
+    }
+  };
+
+  const stopCurrentStream = () => {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setPreviewReady(false);
+  };
+
+  const requestMediaStream = async (facingMode: CameraFacing) => {
+    const stream = await navigator.mediaDevices.getUserMedia(
+      mediaConstraints(facingMode)
+    );
+    attachStream(stream);
+    setPreviewReady(true);
+    return stream;
+  };
+
+  const updateBackgroundUploadState = () => {
+    setBackgroundUpload((current) => ({
+      ...current,
+      uploadedChunks: chunkUploadsRef.current.length,
+      pendingChunks: pendingChunkUploadsRef.current.length,
+    }));
+  };
+
+  const uploadRecordingBlob = async (blob: Blob, mimeType: string) => {
+    const contentType = storageContentType(mimeType);
+    const response = await fetch(`/api/spark/interviews/${token}/upload`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contentType,
+        sizeBytes: blob.size,
+      }),
+    });
+    const upload = (await response.json()) as Partial<RecordingUploadResponse> & {
+      success?: boolean;
+      error?: string;
+    };
+
+    if (
+      !response.ok ||
+      !upload.success ||
+      !upload.bucket ||
+      !upload.path ||
+      !upload.uploadToken
+    ) {
+      throw new Error(upload.error || "Unable to prepare video upload.");
+    }
+
+    const supabase = getBrowserSupabase();
+    const { error } = await supabase.storage
+      .from(upload.bucket)
+      .uploadToSignedUrl(upload.path, upload.uploadToken, blob, {
+        contentType,
+      });
+
+    if (error) {
+      throw new Error(error.message || "Unable to upload interview video.");
+    }
+
+    return {
+      bucket: upload.bucket,
+      path: upload.path,
+      mimeType: contentType,
+      sizeBytes: blob.size,
+      uploadedAt: new Date().toISOString(),
+    };
+  };
+
+  const uploadChunkInBackground = (chunk: Blob) => {
+    if (!chunk.size) return;
+
+    const uploadPromise = uploadRecordingBlob(
+      chunk,
+      chunk.type || recorderRef.current?.mimeType || "video/webm"
+    )
+      .then((upload) => {
+        chunkUploadsRef.current.push(upload);
+        setBackgroundUpload((current) => ({
+          ...current,
+          uploadedChunks: chunkUploadsRef.current.length,
+        }));
+      })
+      .catch(() => {
+        failedChunkUploadsRef.current += 1;
+        setBackgroundUpload((current) => ({
+          ...current,
+          failedChunks: failedChunkUploadsRef.current,
+        }));
+      })
+      .finally(() => {
+        pendingChunkUploadsRef.current =
+          pendingChunkUploadsRef.current.filter((item) => item !== uploadPromise);
+        updateBackgroundUploadState();
+      });
+
+    pendingChunkUploadsRef.current.push(uploadPromise);
+    updateBackgroundUploadState();
+  };
+
+  const waitForBackgroundUploads = async () => {
+    const pendingUploads = pendingChunkUploadsRef.current;
+    if (pendingUploads.length) {
+      await Promise.allSettled(pendingUploads);
+      updateBackgroundUploadState();
     }
   };
 
@@ -143,6 +307,14 @@ export function SparkInterviewSession({
     }
 
     const mimeType = getRecordingMimeType();
+    chunkUploadsRef.current = [];
+    pendingChunkUploadsRef.current = [];
+    failedChunkUploadsRef.current = 0;
+    setBackgroundUpload({
+      uploadedChunks: 0,
+      pendingChunks: 0,
+      failedChunks: 0,
+    });
     const recorder = new MediaRecorder(stream, {
       ...(mimeType ? { mimeType } : {}),
       videoBitsPerSecond: 550_000,
@@ -152,22 +324,50 @@ export function SparkInterviewSession({
     recorder.ondataavailable = (event) => {
       if (event.data.size > 0) {
         chunksRef.current.push(event.data);
+        uploadChunkInBackground(event.data);
       }
     };
-    recorder.start(1000);
+    recorder.start(RECORDING_CHUNK_MS);
     recorderRef.current = recorder;
+  };
+
+  const startCameraTest = async (facingMode = cameraFacing) => {
+    setLoading(true);
+    try {
+      stopCurrentStream();
+      await requestMediaStream(facingMode);
+      toast.success("Camera and microphone are ready.");
+    } catch (error) {
+      stopCurrentStream();
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Camera and microphone are required."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const switchCamera = async () => {
+    if (phase !== "ready") return;
+    const nextFacing = cameraFacing === "user" ? "environment" : "user";
+    setCameraFacing(nextFacing);
+    await startCameraTest(nextFacing);
   };
 
   const startInterview = async () => {
     setLoading(true);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user" },
-        audio: true,
-      });
-      attachStream(stream);
+      const stream = streamRef.current || (await requestMediaStream(cameraFacing));
       startRecording(stream);
-      startedAtRef.current = Date.now();
+      const startedAt = Date.now();
+      startedAtRef.current = startedAt;
+      setRecordingElapsed(0);
+      if (timerRef.current) window.clearInterval(timerRef.current);
+      timerRef.current = window.setInterval(() => {
+        setRecordingElapsed(Math.max(1, Math.round((Date.now() - startedAt) / 1000)));
+      }, 1000);
 
       const response = await fetch(`/api/spark/interviews/${token}/start`, {
         method: "POST",
@@ -182,6 +382,7 @@ export function SparkInterviewSession({
       toast.success("Interview started.");
     } catch (error) {
       streamRef.current?.getTracks().forEach((track) => track.stop());
+      if (timerRef.current) window.clearInterval(timerRef.current);
       toast.error(
         error instanceof Error
           ? error.message
@@ -236,49 +437,23 @@ export function SparkInterviewSession({
     }
 
     const contentType = storageContentType(capture.mimeType);
-    const response = await fetch(`/api/spark/interviews/${token}/upload`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contentType,
-        sizeBytes: capture.sizeBytes,
-      }),
-    });
-    const upload = (await response.json()) as Partial<RecordingUploadResponse> & {
-      success?: boolean;
-      error?: string;
-    };
-
-    if (
-      !response.ok ||
-      !upload.success ||
-      !upload.bucket ||
-      !upload.path ||
-      !upload.uploadToken
-    ) {
-      throw new Error(upload.error || "Unable to prepare video upload.");
-    }
-
-    const supabase = getBrowserSupabase();
-    const { error } = await supabase.storage
-      .from(upload.bucket)
-      .uploadToSignedUrl(upload.path, upload.uploadToken, capture.blob, {
-        contentType,
-      });
-
-    if (error) {
-      throw new Error(error.message || "Unable to upload interview video.");
-    }
+    const upload = await uploadRecordingBlob(capture.blob, contentType);
 
     return {
       captured: true,
       durationSeconds: capture.durationSeconds,
       mimeType: contentType,
       sizeBytes: capture.sizeBytes,
+      uploadStrategy: "final_recording_with_background_chunks",
       storage: {
         bucket: upload.bucket,
         path: upload.path,
         uploadedAt: new Date().toISOString(),
+      },
+      chunks: chunkUploadsRef.current,
+      chunkUploadSummary: {
+        uploadedChunks: chunkUploadsRef.current.length,
+        failedChunks: failedChunkUploadsRef.current,
       },
     };
   };
@@ -315,6 +490,8 @@ export function SparkInterviewSession({
     try {
       const capture = await stopRecorder();
       streamRef.current?.getTracks().forEach((track) => track.stop());
+      if (timerRef.current) window.clearInterval(timerRef.current);
+      await waitForBackgroundUploads();
       const recording = await uploadRecording(capture);
 
       const response = await fetch(`/api/spark/interviews/${token}/complete`, {
@@ -386,14 +563,36 @@ export function SparkInterviewSession({
 
         <div className="flex flex-1 flex-col justify-center px-4 py-5">
           <section className="sn-card p-4">
-            <div className="aspect-[4/3] overflow-hidden rounded-lg bg-[#111827]">
-              <div className="flex h-full items-center justify-center text-white">
-                <div className="text-center">
-                  <Camera className="mx-auto h-10 w-10" />
-                  <p className="mt-3 text-sm font-bold">Camera ready</p>
+            <div className="relative mx-auto aspect-[9/16] max-h-[58vh] w-full max-w-sm overflow-hidden rounded-lg bg-[#111827]">
+              {previewReady ? (
+                <>
+                  <video
+                    ref={videoRef}
+                    className={`h-full w-full object-cover ${
+                      cameraFacing === "user" ? "scale-x-[-1]" : ""
+                    }`}
+                    autoPlay
+                    muted
+                    playsInline
+                  />
+                  <div className="absolute left-3 top-3 rounded-full bg-black/55 px-3 py-1 text-xs font-extrabold text-white backdrop-blur">
+                    {cameraFacing === "user" ? "Mirrored selfie preview" : "Rear camera preview"}
+                  </div>
+                </>
+              ) : (
+                <div className="flex h-full items-center justify-center text-white">
+                  <div className="text-center">
+                    <Camera className="mx-auto h-10 w-10" />
+                    <p className="mt-3 text-sm font-bold">Camera preview</p>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
+            {!previewReady && (
+              <p className="mt-3 rounded-lg bg-[var(--sn-blue-50)] px-3 py-2 text-xs font-bold text-[var(--sn-blue-700)]">
+                Test your camera and microphone before starting.
+              </p>
+            )}
             <h2 className="mt-4 text-xl font-extrabold text-[var(--sn-ink)]">
               Hi {candidateName}
             </h2>
@@ -423,12 +622,38 @@ export function SparkInterviewSession({
           </section>
         </div>
 
-        <div className="sticky bottom-0 border-t border-[var(--sn-line)] bg-white p-4">
+        <div className="sticky bottom-0 space-y-2 border-t border-[var(--sn-line)] bg-white p-4">
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 border-[var(--sn-line)] font-extrabold"
+              onClick={() => startCameraTest()}
+              disabled={loading}
+            >
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Camera className="h-4 w-4" />
+              )}
+              Test camera
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 border-[var(--sn-line)] font-extrabold"
+              onClick={switchCamera}
+              disabled={loading || !previewReady}
+            >
+              <SwitchCamera className="h-4 w-4" />
+              Flip camera
+            </Button>
+          </div>
           <Button
             type="button"
             className="sn-button-coral h-12 w-full text-base font-extrabold"
             onClick={startInterview}
-            disabled={loading}
+            disabled={loading || !previewReady}
           >
             {loading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -473,18 +698,36 @@ export function SparkInterviewSession({
       </header>
 
       <div className="flex-1 space-y-4 px-4 py-4">
-        <section className="relative overflow-hidden rounded-lg bg-[#111827]">
+        <section className="relative mx-auto aspect-[9/16] max-h-[62vh] w-full max-w-sm overflow-hidden rounded-lg bg-[#111827]">
           <div className="absolute left-3 top-3 z-10 inline-flex items-center gap-2 rounded-full bg-[var(--sn-danger)] px-3 py-1 text-xs font-extrabold text-white shadow-sm">
             <span className="h-2 w-2 rounded-full bg-white" />
-            Recording video and audio
+            Recording
+          </div>
+          <div className="absolute right-3 top-3 z-10 rounded-full bg-black/55 px-3 py-1 text-xs font-extrabold text-white backdrop-blur">
+            {formatTimer(recordingElapsed)}
           </div>
           <video
             ref={videoRef}
-            className="aspect-[4/3] w-full object-cover"
+            className={`h-full w-full object-cover ${
+              cameraFacing === "user" ? "scale-x-[-1]" : ""
+            }`}
             autoPlay
             muted
             playsInline
           />
+          <div className="absolute bottom-3 left-3 right-3 z-10 rounded-lg bg-black/55 px-3 py-2 text-[11px] font-bold text-white backdrop-blur">
+            {backgroundUpload.pendingChunks > 0
+              ? `Saving backup clip${backgroundUpload.pendingChunks > 1 ? "s" : ""}`
+              : backgroundUpload.uploadedChunks > 0
+                ? `${backgroundUpload.uploadedChunks} backup clip${
+                    backgroundUpload.uploadedChunks > 1 ? "s" : ""
+                  } saved`
+                : "Recording locally"}
+            {backgroundUpload.failedChunks > 0 &&
+              `, ${backgroundUpload.failedChunks} backup clip${
+                backgroundUpload.failedChunks > 1 ? "s" : ""
+              } failed`}
+          </div>
         </section>
 
         <section className="sn-card p-4">

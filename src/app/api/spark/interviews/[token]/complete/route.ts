@@ -37,6 +37,29 @@ function answersValue(value: unknown): InterviewAnswer[] {
     .filter((item) => item.question && item.answer);
 }
 
+function chunkUploadsValue(value: unknown, applicationId: string) {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item) => jsonObject(item))
+    .map((item) => {
+      const bucket = stringValue(item.bucket);
+      const path = stringValue(item.path);
+      return {
+        bucket,
+        path,
+        mimeType: stringValue(item.mimeType),
+        sizeBytes: numberValue(item.sizeBytes),
+        uploadedAt: stringValue(item.uploadedAt),
+      };
+    })
+    .filter(
+      (item) =>
+        item.bucket === SPARK_INTERVIEW_RECORDINGS_BUCKET &&
+        item.path.startsWith(`${applicationId}/`)
+    );
+}
+
 function appendEvent(current: unknown, event: Record<string, unknown>) {
   const state = jsonObject(current);
   const existingEvents = Array.isArray(state.events) ? state.events : [];
@@ -131,6 +154,8 @@ export async function POST(
     const validRecordingStorage =
       recordingBucket === SPARK_INTERVIEW_RECORDINGS_BUCKET &&
       recordingPath.startsWith(`${application.id}/`);
+    const chunkUploads = chunkUploadsValue(recording.chunks, application.id);
+    const chunkUploadSummary = jsonObject(recording.chunkUploadSummary);
     const browser = jsonObject(body.browser);
     const recordingSeconds = numberValue(recording.durationSeconds);
     const transcript: JsonValue = {
@@ -147,6 +172,14 @@ export async function POST(
         durationSeconds: recordingSeconds,
         mimeType: stringValue(recording.mimeType),
         sizeBytes: numberValue(recording.sizeBytes),
+        uploadStrategy:
+          stringValue(recording.uploadStrategy) ||
+          "final_recording_upload",
+        chunks: chunkUploads as unknown as JsonValue,
+        chunkUploadSummary: {
+          uploadedChunks: chunkUploads.length,
+          failedChunks: numberValue(chunkUploadSummary.failedChunks),
+        },
         storage: validRecordingStorage
           ? {
               bucket: recordingBucket,
