@@ -526,6 +526,65 @@ export async function getQuestionBankForPosting(
   return data as unknown as SparkQuestionBank | null;
 }
 
+export type SparkInterviewSnapshotQuestion = {
+  id: string;
+  text: string;
+  type: string;
+  source: string;
+  source_label: string | null;
+  source_category: string | null;
+  target_seconds: number | null;
+  generated_by: string | null;
+  generator_label: string | null;
+  mcp_run_id: string | null;
+};
+
+function stringField(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+// Normalize an approved bank's questions JSON into the shape the candidate
+// interview needs. Tolerant of missing fields, since upstream agent output is
+// not runtime-validated.
+export function interviewQuestionsFromBank(
+  bank: Pick<SparkQuestionBank, "questions"> | null
+): SparkInterviewSnapshotQuestion[] {
+  const raw =
+    bank && Array.isArray(bank.questions) ? (bank.questions as unknown[]) : [];
+  return raw
+    .map((entry) => {
+      const obj =
+        entry && typeof entry === "object"
+          ? (entry as Record<string, unknown>)
+          : {};
+      const text = typeof obj.text === "string" ? obj.text.trim() : "";
+      if (!text) return null;
+      return {
+        id: stringField(obj.id),
+        text,
+        type: stringField(obj.type) || "role_specific",
+        source: stringField(obj.source) || "question_bank",
+        source_label:
+          stringField(obj.source_label) || stringField(obj.sourceLabel) || null,
+        source_category:
+          stringField(obj.source_category) ||
+          stringField(obj.sourceCategory) ||
+          null,
+        target_seconds:
+          typeof obj.target_seconds === "number" ? obj.target_seconds : null,
+        generated_by:
+          stringField(obj.generated_by) || stringField(obj.generatedBy) || null,
+        generator_label:
+          stringField(obj.generator_label) ||
+          stringField(obj.generatorLabel) ||
+          null,
+        mcp_run_id:
+          stringField(obj.mcp_run_id) || stringField(obj.mcpRunId) || null,
+      };
+    })
+    .filter((q): q is SparkInterviewSnapshotQuestion => q !== null);
+}
+
 export async function getApprovedQuestionBankForPosting(
   postingId: string
 ): Promise<SparkQuestionBank | null> {

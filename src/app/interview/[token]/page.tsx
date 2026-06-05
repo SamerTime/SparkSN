@@ -146,14 +146,29 @@ export default async function InterviewPage({
   }
 
   const status = interviewStatus(application.interviewMedia, application.status);
-  const approvedQuestionBank = await getApprovedQuestionBankForPosting(
-    application.posting.id
+
+  // Prefer the questions snapshotted onto the interview session at invite time
+  // (the recruiter-approved, Roger-generated bank). Fall back to the live
+  // approved bank for older invites, then to a generic set as a last resort so
+  // the interview is never empty.
+  const sessionSnapshot = jsonObject(
+    jsonObject(application.interviewMedia).session
   );
-  const approvedQuestions = questionBankQuestions(approvedQuestionBank?.questions);
-  const questions = approvedQuestions.length >= 3 ? approvedQuestions : buildQuestions(
-    application.posting.title,
-    application.posting.clientName
-  );
+  let questions = questionBankQuestions(sessionSnapshot.questions);
+
+  if (questions.length < 3) {
+    const approvedBank = await getApprovedQuestionBankForPosting(
+      application.posting.id
+    );
+    questions = questionBankQuestions(approvedBank?.questions);
+  }
+
+  if (questions.length < 3) {
+    questions = buildQuestions(
+      application.posting.title,
+      application.posting.clientName
+    );
+  }
 
   return (
     <main className="sn-page">

@@ -6,6 +6,7 @@ import type {
 } from "@/lib/spark-db";
 import {
   buildSparkQuestionBankDraft,
+  fetchSparkQuestionBankDraftFromMcp,
   SPARK_QUESTION_BANK_MCP_SERVER_SLUG,
   SPARK_QUESTION_BANK_MCP_TOOL_NAME,
   SPARK_QUESTION_BANK_PROMPT_VERSION,
@@ -98,6 +99,13 @@ function rogerToken() {
     process.env.KAIZENIS_MCP_CONSUMER_KEY?.trim() ||
     process.env.KAIZENIS_MCP_TOKEN?.trim() ||
     ""
+  );
+}
+
+function dashboard47QuestionBankConfigured() {
+  return Boolean(
+    process.env.DASHBOARD47_MCP_URL?.trim() &&
+      process.env.DASHBOARD47_MCP_API_KEY?.trim()
   );
 }
 
@@ -344,6 +352,34 @@ function optionalObject(...values: unknown[]) {
   return null;
 }
 
+function withRogerQuestionMetadata(
+  draft: SparkQuestionBankDraft,
+  mcpRunId: string | null,
+  modelName: string | null
+): SparkQuestionBankDraft {
+  return {
+    ...draft,
+    questions: draft.questions.map((question) => ({
+      ...question,
+      generated_by: "roger_mcp",
+      generator_label: "Roger",
+      source_label: question.source_label || sourceCategory(question.source),
+      source_category:
+        question.source_category || sourceCategory(question.source),
+      mcp_run_id: mcpRunId,
+    })),
+    agentReview: {
+      ...jsonObject(draft.agentReview),
+      roger: {
+        status: "used",
+        mcpRunId,
+        toolName: ROGER_MCP_GENERATE_QUESTION_BANK_TOOL,
+        modelName,
+      },
+    } as JsonValue,
+  };
+}
+
 export async function generateQuestionBankWithRoger(
   posting: SparkJobPosting,
   requestedTarget?: unknown
@@ -352,6 +388,34 @@ export async function generateQuestionBankWithRoger(
     posting,
     requestedTarget
   );
+  let dashboard47Error: string | null = null;
+
+  if (dashboard47QuestionBankConfigured()) {
+    try {
+      const result = await fetchSparkQuestionBankDraftFromMcp(
+        posting,
+        requestedTarget
+      );
+
+      return {
+        draft: withRogerQuestionMetadata(
+          result.draft,
+          result.mcpRunId,
+          result.modelName
+        ),
+        generatedBy: "mcp",
+        mcpRunId: result.mcpRunId,
+        modelName: result.modelName || "roger:question-bank-v1.0",
+        rogerUsed: true,
+        rogerFallbackReason: null,
+      };
+    } catch (error) {
+      dashboard47Error =
+        error instanceof Error
+          ? error.message
+          : "Dashboard47 Roger pipeline failed.";
+    }
+  }
 
   const roger = await callRogerTool(ROGER_MCP_GENERATE_QUESTION_BANK_TOOL, {
     payloadVersion: "spark.roger.question_bank_request.v1",
@@ -378,7 +442,10 @@ export async function generateQuestionBankWithRoger(
           ...jsonObject(fallbackDraft.agentReview),
           roger: {
             status: roger.disabled ? "not_configured" : "fallback",
-            reason: roger.error || "Roger MCP unavailable.",
+            reason:
+              dashboard47Error ||
+              roger.error ||
+              "Roger MCP unavailable.",
           },
         } as JsonValue,
       },
@@ -386,7 +453,8 @@ export async function generateQuestionBankWithRoger(
       mcpRunId: null,
       modelName: "deterministic-template-v1",
       rogerUsed: false,
-      rogerFallbackReason: roger.error || "Roger MCP unavailable.",
+      rogerFallbackReason:
+        dashboard47Error || roger.error || "Roger MCP unavailable.",
     };
   }
 
