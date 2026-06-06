@@ -629,6 +629,9 @@ export type SparkQuestionRepositoryRow = {
   answersCount: number;
   mcpRunId: string | null;
   createdAt: string;
+  up?: number;
+  down?: number;
+  lessons?: number;
 };
 
 function deriveQuestionIntent(type: string, source: string): string {
@@ -833,9 +836,126 @@ export async function listQuestionRepositoryRows(): Promise<
   SparkQuestionRepositoryRow[]
 > {
   const fromTables = await listQuestionRepositoryRowsFromTables();
-  if (fromTables) return fromTables;
   // Mirror tables not present yet (pre-migration) — derive from JSONB.
-  return listQuestionRepositoryRowsFromJsonb();
+  const rows = fromTables ?? (await listQuestionRepositoryRowsFromJsonb());
+  const tallies = await loadFeedbackTalliesByQuestion();
+  for (const row of rows) {
+    const t = tallies.get(row.questionId);
+    row.up = t?.up ?? 0;
+    row.down = t?.down ?? 0;
+    row.lessons = t?.lessons ?? 0;
+  }
+  return rows;
+}
+
+// ---------------------------------------------------------------------------
+// Question feedback (Phase B): recruiter signals (up/down) + lessons.
+// ---------------------------------------------------------------------------
+
+export type SparkQuestionFeedback = {
+  id: string;
+  questionId: string | null;
+  postingId: string | null;
+  applicationId: string | null;
+  kind: "signal" | "lesson";
+  signal: "up" | "down" | null;
+  lessonText: string | null;
+  appliesTo: string | null;
+  origin: "recruiter" | "roger";
+  outcome: string | null;
+  recruiterId: string | null;
+  submittedToKaizenis: boolean;
+  kaizenisQueueId: string | null;
+  createdAt: string;
+};
+
+async function loadFeedbackTalliesByQuestion(): Promise<
+  Map<string, { up: number; down: number; lessons: number }>
+> {
+  const tallies = new Map<string, { up: number; down: number; lessons: number }>();
+  const { data, error } = await getSparkSupabase()
+    .from("spark_question_feedback")
+    .select("question_id,kind,signal");
+  if (error) {
+    if (missingTable(error, "spark_question_feedback")) return tallies;
+    fail(error, "Unable to load Spark question feedback");
+  }
+  for (const row of (data || []) as Array<Record<string, unknown>>) {
+    const qid = row.question_id ? String(row.question_id) : "";
+    if (!qid) continue;
+    const entry = tallies.get(qid) ?? { up: 0, down: 0, lessons: 0 };
+    if (row.kind === "lesson") entry.lessons += 1;
+    else if (row.signal === "up") entry.up += 1;
+    else if (row.signal === "down") entry.down += 1;
+    tallies.set(qid, entry);
+  }
+  return tallies;
+}
+
+export async function insertQuestionFeedback(values: {
+  questionId?: string | null;
+  postingId?: string | null;
+  applicationId?: string | null;
+  kind: "signal" | "lesson";
+  signal?: "up" | "down" | null;
+  lessonText?: string | null;
+  appliesTo?: string | null;
+  origin?: "recruiter" | "roger";
+  outcome?: string | null;
+  recruiterId?: string | null;
+  submittedToKaizenis?: boolean;
+  kaizenisQueueId?: string | null;
+}): Promise<SparkQuestionFeedback> {
+  const { data, error } = await getSparkSupabase()
+    .from("spark_question_feedback")
+    .insert({
+      id: rowId(),
+      question_id: values.questionId ?? null,
+      posting_id: values.postingId ?? null,
+      application_id: values.applicationId ?? null,
+      kind: values.kind,
+      signal: values.signal ?? null,
+      lesson_text: values.lessonText ?? null,
+      applies_to: values.appliesTo ?? null,
+      origin: values.origin ?? "recruiter",
+      outcome: values.outcome ?? null,
+      recruiter_id: values.recruiterId ?? null,
+      submitted_to_kaizenis: values.submittedToKaizenis ?? false,
+      kaizenis_queue_id: values.kaizenisQueueId ?? null,
+      created_at: nowIso(),
+    })
+    .select("*")
+    .single();
+  if (error) fail(error, "Unable to record Spark question feedback");
+  return data as unknown as SparkQuestionFeedback;
+}
+
+export async function getQuestionFeedbackSummary(): Promise<{
+  signals: number;
+  lessons: number;
+  proposed: number;
+}> {
+  const { data, error } = await getSparkSupabase()
+    .from("spark_question_feedback")
+    .select("kind,submitted_to_kaizenis");
+  if (error) {
+    if (missingTable(error, "spark_question_feedback")) {
+      return { signals: 0, lessons: 0, proposed: 0 };
+    }
+    fail(error, "Unable to summarize Spark question feedback");
+  }
+  let signals = 0;
+  let lessons = 0;
+  let proposed = 0;
+  for (const row of (data || []) as Array<Record<string, unknown>>) {
+    if (row.kind === "lesson") {
+      lessons += 1;
+      if (row.submitted_to_kaizenis === true) proposed += 1;
+    } else {
+      signals += 1;
+    }
+  }
+  return { signals, lessons, proposed };
 }
 
 export type SparkAnalysisApplication = Pick<
