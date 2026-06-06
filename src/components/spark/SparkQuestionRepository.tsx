@@ -246,7 +246,19 @@ export function SparkQuestionRepository({
   );
 
   const defaultColDef = useMemo<ColDef>(
-    () => ({ sortable: true, filter: true, resizable: true }),
+    () => ({
+      sortable: true,
+      filter: true,
+      resizable: true,
+      wrapText: true,
+      autoHeight: true,
+      cellStyle: {
+        lineHeight: 1.4,
+        paddingTop: "8px",
+        paddingBottom: "8px",
+        whiteSpace: "normal",
+      },
+    }),
     []
   );
 
