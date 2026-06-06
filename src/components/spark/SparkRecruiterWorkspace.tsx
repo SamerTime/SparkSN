@@ -30,6 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SparkInitials } from "@/components/spark/SparkBrand";
 import { SparkRecruiterActions } from "@/components/spark/SparkRecruiterActions";
+import { RogerCandidateCoach } from "@/components/spark/RogerCandidateCoach";
 import type {
   SparkApplicationWithRelations,
   SparkPublishedJobListItem,
@@ -1770,6 +1771,13 @@ function CandidateDetailDrawer({
                   </div>
                 )}
               </section>
+
+              <RogerCandidateCoach
+                applicationId={application.id}
+                postingId={application.postingId}
+                status={application.status}
+                aiSummary={application.aiSummary}
+              />
 
               <section
                 className={
