@@ -426,10 +426,10 @@ function normalizeMcpQuestion(
   const maxScore = Number(scoringRaw.max_score);
 
   return {
-    id:
-      typeof q.id === "string" && q.id.trim()
-        ? q.id
-        : `qb_${seedHash.slice(0, 8)}_${String(index + 1).padStart(2, "0")}`,
+    // Always stamp a unique, deterministic id (seedHash differs per job order).
+    // Roger's own id (e.g. "q1") is NOT unique across banks — keeping it collapses
+    // the repository grid and breaks question<->answer/feedback links — so ignore it.
+    id: `qb_${seedHash.slice(0, 8)}_${String(index + 1).padStart(2, "0")}`,
     text: typeof q.text === "string" ? q.text : "",
     type,
     source: typeof q.source === "string" ? q.source : "jd",
