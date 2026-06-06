@@ -605,6 +605,155 @@ export async function getApprovedQuestionBankForPosting(
   return data as unknown as SparkQuestionBank | null;
 }
 
+// ---------------------------------------------------------------------------
+// Question repository: flatten every question across all banks (incl. retired)
+// into one row each, joined to its job order and to a count of candidate
+// answers (answers carry questionId, so question <-> answer is relational).
+// ---------------------------------------------------------------------------
+
+export type SparkQuestionRepositoryRow = {
+  questionId: string;
+  bankId: string;
+  bankStatus: SparkQuestionBankStatus;
+  postingId: string;
+  jobOrder: string;
+  clientName: string | null;
+  text: string;
+  type: string;
+  intent: string;
+  source: string;
+  generator: string;
+  model: string | null;
+  promptVersion: string | null;
+  targetSeconds: number | null;
+  answersCount: number;
+  mcpRunId: string | null;
+  createdAt: string;
+};
+
+function deriveQuestionIntent(type: string, source: string): string {
+  const s = source.toLowerCase();
+  if (s.includes("skill")) return "Probe hands-on depth in a required skill";
+  if (s.includes("responsibilit")) return "See how they'd handle a core responsibility";
+  if (s.includes("requirement")) return "Verify a must-have requirement";
+  if (s.includes("qualification")) return "Confirm a stated qualification";
+  if (s.includes("behavioral")) return "Assess a behavioral / soft-skill signal";
+  if (s.includes("availability")) return "Confirm availability and logistics fit";
+  const t = type.toLowerCase();
+  if (t === "safety") return "Check safety / compliance awareness";
+  if (t === "behavioral") return "Assess a behavioral / soft-skill signal";
+  if (t === "availability") return "Confirm availability and logistics fit";
+  if (t === "technical") return "Probe technical capability";
+  return "Assess job-relevant fit";
+}
+
+export async function listQuestionRepositoryRows(): Promise<
+  SparkQuestionRepositoryRow[]
+> {
+  const supabase = getSparkSupabase();
+
+  const banksRes = await supabase
+    .from("SparkQuestionBank")
+    .select(
+      "id,postingId,status,generatedBy,modelName,promptVersion,generatedAt,approvedAt,mcpRunId,questions"
+    );
+  if (banksRes.error) {
+    if (missingTable(banksRes.error, "SparkQuestionBank")) return [];
+    fail(banksRes.error, "Unable to load Spark question banks");
+  }
+  const banks = (banksRes.data || []) as Array<Record<string, unknown>>;
+  if (banks.length === 0) return [];
+
+  const postingIds = [
+    ...new Set(banks.map((b) => String(b.postingId)).filter(Boolean)),
+  ];
+  const postingsRes = await supabase
+    .from("SparkJobPosting")
+    .select("id,title,clientName")
+    .in("id", postingIds);
+  if (postingsRes.error) {
+    fail(postingsRes.error, "Unable to load Spark postings for repository");
+  }
+  const postingById = new Map<string, { title: string; clientName: string | null }>();
+  for (const p of (postingsRes.data || []) as Array<Record<string, unknown>>) {
+    postingById.set(String(p.id), {
+      title: String(p.title ?? "Untitled"),
+      clientName: (p.clientName as string) ?? null,
+    });
+  }
+
+  // Count candidate answers per questionId across all applications.
+  const appsRes = await supabase
+    .from("SparkApplication")
+    .select("interviewTranscript");
+  if (appsRes.error) {
+    fail(appsRes.error, "Unable to load Spark applications for repository");
+  }
+  const answerCountByQuestionId = new Map<string, number>();
+  for (const app of (appsRes.data || []) as Array<Record<string, unknown>>) {
+    const transcript = app.interviewTranscript;
+    const answers =
+      transcript &&
+      typeof transcript === "object" &&
+      Array.isArray((transcript as Record<string, unknown>).answers)
+        ? ((transcript as Record<string, unknown>).answers as unknown[])
+        : [];
+    for (const a of answers) {
+      const qid =
+        a && typeof a === "object"
+          ? String((a as Record<string, unknown>).questionId ?? "")
+          : "";
+      if (qid) {
+        answerCountByQuestionId.set(
+          qid,
+          (answerCountByQuestionId.get(qid) ?? 0) + 1
+        );
+      }
+    }
+  }
+
+  const rows: SparkQuestionRepositoryRow[] = [];
+  for (const bank of banks) {
+    const questions = Array.isArray(bank.questions)
+      ? (bank.questions as unknown[])
+      : [];
+    const posting = postingById.get(String(bank.postingId));
+    for (const q of questions) {
+      const item = (q && typeof q === "object" ? q : {}) as Record<string, unknown>;
+      const text = typeof item.text === "string" ? item.text : "";
+      if (!text) continue;
+      const qid = typeof item.id === "string" && item.id ? item.id : "";
+      const type = typeof item.type === "string" ? item.type : "role_specific";
+      const source = typeof item.source === "string" ? item.source : "";
+      const generator =
+        (typeof item.generator_label === "string" && item.generator_label) ||
+        (typeof item.generated_by === "string" && item.generated_by) ||
+        String(bank.generatedBy ?? "system");
+      rows.push({
+        questionId: qid,
+        bankId: String(bank.id),
+        bankStatus: String(bank.status ?? "Draft") as SparkQuestionBankStatus,
+        postingId: String(bank.postingId),
+        jobOrder: posting?.title ?? "Unknown job order",
+        clientName: posting?.clientName ?? null,
+        text,
+        type,
+        intent: deriveQuestionIntent(type, source),
+        source,
+        generator,
+        model: (bank.modelName as string) ?? null,
+        promptVersion: (bank.promptVersion as string) ?? null,
+        targetSeconds:
+          typeof item.target_seconds === "number" ? item.target_seconds : null,
+        answersCount: qid ? answerCountByQuestionId.get(qid) ?? 0 : 0,
+        mcpRunId: (bank.mcpRunId as string) ?? null,
+        createdAt: String(bank.generatedAt ?? bank.approvedAt ?? ""),
+      });
+    }
+  }
+  return rows;
+}
+
 export type SparkAnalysisApplication = Pick<
   SparkApplication,
   "id" | "status" | "postingId" | "candidateName" | "interviewTranscript" | "aiSummary"
