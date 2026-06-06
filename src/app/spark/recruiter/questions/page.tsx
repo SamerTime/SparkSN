@@ -1,6 +1,4 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 import { getSparkRecruiterUser } from "@/lib/spark-auth";
 import {
   getQuestionFeedbackSummary,
@@ -44,13 +42,6 @@ export default async function QuestionRepositoryPage() {
                 {feedback.proposed} in Roger&apos;s queue
               </span>
             </div>
-            <Link
-              href="/spark/recruiter"
-              className="inline-flex items-center gap-2 text-sm font-medium text-[var(--sn-ink)] hover:underline"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to recruiter workspace
-            </Link>
           </div>
         </div>
 
