@@ -4,7 +4,6 @@ import {
   ArrowLeft,
   Camera,
   CheckCircle2,
-  Clock3,
   DollarSign,
   FileText,
   MapPin,
@@ -169,7 +168,6 @@ export default async function JobDetailPage({
                 <h2 className="text-lg font-extrabold text-[var(--sn-ink)]">
                   Spark apply path
                 </h2>
-                <span className="sn-chip sn-chip-coral">2-3 min screen</span>
               </div>
               <div className="mt-5 grid grid-cols-3 items-center gap-2">
                 <span className="spark-stage-line is-done" />
@@ -187,7 +185,8 @@ export default async function JobDetailPage({
                 </div>
                 <div className="flex gap-3">
                   <Camera className="mt-0.5 h-4 w-4 text-[var(--sn-coral)]" />
-                  Approved candidates get a mobile video link.
+                  You&apos;ll need to use your location, camera, audio and agree
+                  to have AI review your responses.
                 </div>
                 <div className="flex gap-3">
                   <Mic className="mt-0.5 h-4 w-4 text-[var(--sn-blue)]" />
@@ -238,26 +237,15 @@ export default async function JobDetailPage({
             </p>
             <div className="mt-5 grid gap-3 text-sm">
               <div className="rounded-lg bg-white/10 p-3">
-                Target length: 2-3 minutes
+                AI Assisted Screen
               </div>
               <div className="rounded-lg bg-white/10 p-3">
-                Question target: about 10
+                10 Video Questions
               </div>
               <div className="rounded-lg bg-white/10 p-3">
-                Summary: job-related and bias-aware
+                2 - 3 minute response per question
               </div>
             </div>
-          </section>
-
-          <section className="sn-card p-5">
-            <h2 className="flex items-center gap-2 text-lg font-extrabold text-[var(--sn-ink)]">
-              <Clock3 className="h-5 w-5 text-[var(--sn-blue)]" />
-              Recruiter handoff
-            </h2>
-            <p className="mt-3 text-sm leading-6 text-[var(--sn-muted)]">
-              Candidate data remains in Spark for this build. A future handoff
-              can send vetted candidates back into StaffingNation after approval.
-            </p>
           </section>
         </aside>
       </section>
