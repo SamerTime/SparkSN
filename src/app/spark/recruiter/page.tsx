@@ -159,12 +159,20 @@ export default async function SparkRecruiterPage({
                 application record.
               </p>
             </div>
-            <Button asChild className="sn-button-primary gap-2">
-              <Link href="/jobs">
-                View public jobs
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button asChild variant="outline" className="gap-2">
+                <Link href="/spark/recruiter/questions">
+                  Question repository
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+              <Button asChild className="sn-button-primary gap-2">
+                <Link href="/jobs">
+                  View public jobs
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+            </div>
             <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--sn-muted)]">
               <span className="sn-chip bg-white">
                 {recruiterUser.email || "Recruiter"}
