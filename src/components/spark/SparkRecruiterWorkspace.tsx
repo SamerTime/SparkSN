@@ -7,7 +7,6 @@ import { createPortal } from "react-dom";
 import {
   ArrowRight,
   BriefcaseBusiness,
-  CalendarClock,
   ClipboardList,
   Loader2,
   Mail,
@@ -31,6 +30,10 @@ import { Input } from "@/components/ui/input";
 import { SparkInitials } from "@/components/spark/SparkBrand";
 import { SparkRecruiterActions } from "@/components/spark/SparkRecruiterActions";
 import { RogerCandidateCoach } from "@/components/spark/RogerCandidateCoach";
+import {
+  SparkCandidateStepper,
+  wasInvited,
+} from "@/components/spark/SparkCandidateStepper";
 import type {
   SparkApplicationWithRelations,
   SparkPublishedJobListItem,
@@ -984,8 +987,6 @@ export function SparkRecruiterWorkspace({
               <div className="divide-y divide-[var(--sn-line)]">
                 {selectedApplications.map((application) => {
                   const name = candidateName(application);
-                  const location = locationSummary(application.locationSignals);
-                  const profileLocation = candidateLocation(application);
                   const events = communicationEvents(application.communicationState);
                   const latestEvent = events[0];
                   const eventDate = formatEventDate(latestEvent?.at);
@@ -1000,7 +1001,7 @@ export function SparkRecruiterWorkspace({
                         onClick={() => openApplication(application.id)}
                         className="block w-full p-4 pr-16 text-left"
                       >
-                        <div className="grid gap-4 xl:grid-cols-[minmax(220px,1.2fr)_minmax(260px,1.5fr)_minmax(210px,0.9fr)]">
+                        <div className="grid gap-4 xl:grid-cols-[minmax(220px,1fr)_minmax(280px,1.6fr)]">
                         <div className="flex min-w-0 gap-3">
                           <SparkInitials label={name} />
                           <div className="min-w-0">
@@ -1029,45 +1030,6 @@ export function SparkRecruiterWorkspace({
                           </div>
                         </div>
 
-                        <div className="grid gap-2 sm:grid-cols-2">
-                          <div className="rounded-lg border border-[var(--sn-line)] bg-white px-3 py-2">
-                            <p className="text-[11px] font-extrabold uppercase text-[var(--sn-muted)]">
-                              Applied
-                            </p>
-                            <p className="mt-1 text-sm font-bold text-[var(--sn-ink)]">
-                              {formatDate(application.createdAt)}
-                            </p>
-                          </div>
-                          <div className="rounded-lg border border-[var(--sn-line)] bg-white px-3 py-2">
-                            <p className="text-[11px] font-extrabold uppercase text-[var(--sn-muted)]">
-                              Interview
-                            </p>
-                            <p className="mt-1 text-sm font-bold text-[var(--sn-ink)]">
-                              {interviewLabel(application)}
-                            </p>
-                          </div>
-                          <div
-                            className={`rounded-lg border px-3 py-2 sm:col-span-2 ${
-                              location.needsReview
-                                ? "border-[var(--sn-coral-100)] bg-[var(--sn-coral-50)]"
-                                : "border-[#bde8ce] bg-[var(--sn-success-50)]"
-                            }`}
-                          >
-                            <p className="text-[11px] font-extrabold uppercase text-[var(--sn-muted)]">
-                              Location
-                            </p>
-                            <p
-                              className={`mt-1 line-clamp-1 text-sm font-bold ${
-                                location.needsReview
-                                  ? "text-[var(--sn-coral-600)]"
-                                  : "text-[var(--sn-success)]"
-                              }`}
-                            >
-                              {profileLocation || location.label}
-                            </p>
-                          </div>
-                        </div>
-
                         <div className="flex min-w-0 flex-col justify-between gap-3">
                           <p className="line-clamp-3 text-sm leading-6 text-[var(--sn-muted)]">
                             {summaryPreview(application.aiSummary)}
@@ -1092,6 +1054,15 @@ export function SparkRecruiterWorkspace({
                           </div>
                         </div>
                       </div>
+                        <div className="mt-3 border-t border-[var(--sn-line)] pt-3">
+                          <SparkCandidateStepper
+                            status={application.status}
+                            createdAt={application.createdAt}
+                            communicationState={application.communicationState}
+                            interviewMedia={application.interviewMedia}
+                            interviewTranscript={application.interviewTranscript}
+                          />
+                        </div>
                       </button>
                       <WorkflowStatusMenu
                         application={application}
@@ -1689,6 +1660,17 @@ function CandidateDetailDrawer({
                   <Badge className={`border ${statusClass(application.status)}`}>
                     {formatStatus(application.status)}
                   </Badge>
+                  <span
+                    className={`sn-chip py-0.5 text-xs ${
+                      wasInvited(application.communicationState)
+                        ? "sn-chip-coral"
+                        : ""
+                    }`}
+                  >
+                    {wasInvited(application.communicationState)
+                      ? "Invited"
+                      : "Applied"}
+                  </span>
                 </div>
                 <p className="mt-1 text-sm text-[var(--sn-muted)]">
                   {application.posting.title}
@@ -1706,10 +1688,15 @@ function CandidateDetailDrawer({
                       {application.candidatePhone}
                     </span>
                   )}
-                  <span className="sn-chip">
-                    <CalendarClock className="h-3.5 w-3.5" />
-                    Applied {formatDate(application.createdAt)}
-                  </span>
+                </div>
+                <div className="mt-4">
+                  <SparkCandidateStepper
+                    status={application.status}
+                    createdAt={application.createdAt}
+                    communicationState={application.communicationState}
+                    interviewMedia={application.interviewMedia}
+                    interviewTranscript={application.interviewTranscript}
+                  />
                 </div>
               </div>
             </div>
