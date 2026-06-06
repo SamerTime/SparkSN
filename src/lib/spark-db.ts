@@ -647,7 +647,7 @@ function deriveQuestionIntent(type: string, source: string): string {
   return "Assess job-relevant fit";
 }
 
-export async function listQuestionRepositoryRows(): Promise<
+async function listQuestionRepositoryRowsFromJsonb(): Promise<
   SparkQuestionRepositoryRow[]
 > {
   const supabase = getSparkSupabase();
@@ -752,6 +752,90 @@ export async function listQuestionRepositoryRows(): Promise<
     }
   }
   return rows;
+}
+
+// Repository v2: read from the normalized mirror tables (spark_questions +
+// spark_answers). Returns null if the tables don't exist yet so the caller can
+// fall back to the JSONB derivation during the deploy/migrate window.
+async function listQuestionRepositoryRowsFromTables(): Promise<
+  SparkQuestionRepositoryRow[] | null
+> {
+  const supabase = getSparkSupabase();
+
+  const qRes = await supabase
+    .from("spark_questions")
+    .select(
+      "id,bank_id,posting_id,bank_status,text,type,intent,source,generator,model,prompt_version,target_seconds,mcp_run_id,created_at"
+    );
+  if (qRes.error) {
+    if (missingTable(qRes.error, "spark_questions")) return null;
+    fail(qRes.error, "Unable to load Spark questions");
+  }
+  const questions = (qRes.data || []) as Array<Record<string, unknown>>;
+  if (questions.length === 0) return [];
+
+  const postingIds = [
+    ...new Set(questions.map((q) => String(q.posting_id)).filter(Boolean)),
+  ];
+  const postingsRes = await supabase
+    .from("SparkJobPosting")
+    .select("id,title,clientName")
+    .in("id", postingIds);
+  if (postingsRes.error) {
+    fail(postingsRes.error, "Unable to load Spark postings for repository");
+  }
+  const postingById = new Map<string, { title: string; clientName: string | null }>();
+  for (const p of (postingsRes.data || []) as Array<Record<string, unknown>>) {
+    postingById.set(String(p.id), {
+      title: String(p.title ?? "Untitled"),
+      clientName: (p.clientName as string) ?? null,
+    });
+  }
+
+  const answersRes = await supabase.from("spark_answers").select("question_id");
+  if (answersRes.error) {
+    fail(answersRes.error, "Unable to load Spark answers for repository");
+  }
+  const answerCountByQuestionId = new Map<string, number>();
+  for (const a of (answersRes.data || []) as Array<Record<string, unknown>>) {
+    const qid = a.question_id ? String(a.question_id) : "";
+    if (qid) {
+      answerCountByQuestionId.set(qid, (answerCountByQuestionId.get(qid) ?? 0) + 1);
+    }
+  }
+
+  return questions.map((q) => {
+    const posting = postingById.get(String(q.posting_id));
+    const id = String(q.id);
+    return {
+      questionId: id,
+      bankId: String(q.bank_id ?? ""),
+      bankStatus: String(q.bank_status ?? "Draft") as SparkQuestionBankStatus,
+      postingId: String(q.posting_id ?? ""),
+      jobOrder: posting?.title ?? "Unknown job order",
+      clientName: posting?.clientName ?? null,
+      text: String(q.text ?? ""),
+      type: String(q.type ?? "role_specific"),
+      intent: String(q.intent ?? ""),
+      source: String(q.source ?? ""),
+      generator: String(q.generator ?? "system"),
+      model: (q.model as string) ?? null,
+      promptVersion: (q.prompt_version as string) ?? null,
+      targetSeconds: typeof q.target_seconds === "number" ? q.target_seconds : null,
+      answersCount: answerCountByQuestionId.get(id) ?? 0,
+      mcpRunId: (q.mcp_run_id as string) ?? null,
+      createdAt: String(q.created_at ?? ""),
+    };
+  });
+}
+
+export async function listQuestionRepositoryRows(): Promise<
+  SparkQuestionRepositoryRow[]
+> {
+  const fromTables = await listQuestionRepositoryRowsFromTables();
+  if (fromTables) return fromTables;
+  // Mirror tables not present yet (pre-migration) — derive from JSONB.
+  return listQuestionRepositoryRowsFromJsonb();
 }
 
 export type SparkAnalysisApplication = Pick<
