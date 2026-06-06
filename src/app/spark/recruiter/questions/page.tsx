@@ -2,7 +2,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { getSparkRecruiterUser } from "@/lib/spark-auth";
-import { listQuestionRepositoryRows } from "@/lib/spark-db";
+import {
+  getQuestionFeedbackSummary,
+  listQuestionRepositoryRows,
+} from "@/lib/spark-db";
 import { SparkQuestionRepository } from "@/components/spark/SparkQuestionRepository";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +16,10 @@ export default async function QuestionRepositoryPage() {
     redirect("/spark/login");
   }
 
-  const rows = await listQuestionRepositoryRows();
+  const [rows, feedback] = await Promise.all([
+    listQuestionRepositoryRows(),
+    getQuestionFeedbackSummary(),
+  ]);
 
   return (
     <main className="sn-page">
@@ -30,13 +36,22 @@ export default async function QuestionRepositoryPage() {
               candidate answers it has collected.
             </p>
           </div>
-          <Link
-            href="/spark/recruiter"
-            className="inline-flex items-center gap-2 text-sm font-medium text-[var(--sn-ink)] hover:underline"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to recruiter workspace
-          </Link>
+          <div className="flex items-center gap-4">
+            <div className="rounded-md border border-[var(--sn-line)] bg-white px-4 py-2 text-sm">
+              <span className="font-semibold text-[var(--sn-ink)]">Roger learning</span>
+              <span className="ml-3 text-[var(--sn-muted)]">
+                {feedback.signals} signals · {feedback.lessons} lessons ·{" "}
+                {feedback.proposed} in Roger&apos;s queue
+              </span>
+            </div>
+            <Link
+              href="/spark/recruiter"
+              className="inline-flex items-center gap-2 text-sm font-medium text-[var(--sn-ink)] hover:underline"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to recruiter workspace
+            </Link>
+          </div>
         </div>
 
         <SparkQuestionRepository rows={rows} />

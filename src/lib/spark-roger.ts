@@ -819,3 +819,68 @@ export async function analyzeResponsesWithRoger(
     `Roger response analysis failed after 3 attempts: ${lastReason}`
   );
 }
+
+// ---------------------------------------------------------------------------
+// Learning loop: forward a proposed lesson to the KaizenIs intake doorway
+// (POST /api/v1/recruiting-lessons). Returns the queue id; never throws — the
+// caller stores the lesson locally regardless and surfaces the forward status.
+// ---------------------------------------------------------------------------
+
+export async function submitRecruitingLessonToKaizenIs(input: {
+  lesson: string;
+  appliesTo?: string | null;
+  questionId?: string | null;
+  postingId?: string | null;
+  jobOrderId?: string | null;
+  applicationId?: string | null;
+  outcome?: string | null;
+  origin?: "recruiter" | "roger";
+}): Promise<{ ok: boolean; queueId: string | null; error?: string }> {
+  const baseUrl = process.env.DASHBOARD47_MCP_URL?.trim();
+  const apiKey = process.env.DASHBOARD47_MCP_API_KEY?.trim();
+  if (!baseUrl || !apiKey) {
+    return { ok: false, queueId: null, error: "KaizenIs MCP env not configured" };
+  }
+
+  try {
+    const res = await fetch(
+      `${baseUrl.replace(/\/+$/, "")}/api/v1/recruiting-lessons`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          lesson: input.lesson,
+          applies_to: input.appliesTo ?? "",
+          question_id: input.questionId ?? undefined,
+          posting_id: input.postingId ?? undefined,
+          job_order_id: input.jobOrderId ?? undefined,
+          application_id: input.applicationId ?? undefined,
+          outcome: input.outcome ?? undefined,
+          origin: input.origin ?? "recruiter",
+        }),
+      }
+    );
+    const payload = (await res.json().catch(() => null)) as {
+      ok?: boolean;
+      queue_id?: string;
+      error?: { message?: string };
+    } | null;
+    if (!res.ok || !payload?.ok) {
+      return {
+        ok: false,
+        queueId: null,
+        error: payload?.error?.message || `HTTP ${res.status}`,
+      };
+    }
+    return { ok: true, queueId: payload.queue_id ?? null };
+  } catch (error) {
+    return {
+      ok: false,
+      queueId: null,
+      error: error instanceof Error ? error.message : "request failed",
+    };
+  }
+}
