@@ -6,7 +6,6 @@ import {
   Camera,
   CheckCircle2,
   Loader2,
-  Mic,
   PhoneOff,
   Play,
   Send,
@@ -139,7 +138,6 @@ export function SparkInterviewSession({
   token,
   candidateName,
   postingTitle,
-  clientName,
   initialStatus,
   questions,
 }: SparkInterviewSessionProps) {
@@ -576,14 +574,14 @@ export function SparkInterviewSession({
       <div className="flex min-h-[720px] flex-col bg-[var(--sn-soft)]">
         <header className="spark-mobile-header px-5 pb-4 pt-16">
           <p className="text-xs font-extrabold uppercase tracking-normal text-[var(--sn-blue-700)]">
-            Interview session
+            AI Screening
           </p>
           <h1 className="mt-1 text-xl font-extrabold text-[var(--sn-ink)]">
             {postingTitle}
           </h1>
-          {clientName && (
-            <span className="sn-chip sn-chip-blue mt-3">{clientName}</span>
-          )}
+          <p className="mt-3 text-sm leading-6 text-[var(--sn-muted)]">
+            Your camera is used to confirm it&apos;s you answering.
+          </p>
         </header>
 
         <div className="flex flex-1 flex-col justify-center px-4 py-5">
@@ -615,44 +613,40 @@ export function SparkInterviewSession({
             </div>
             {!previewReady && (
               <p className="mt-3 rounded-lg bg-[var(--sn-blue-50)] px-3 py-2 text-xs font-bold text-[var(--sn-blue-700)]">
-                Test your camera and microphone before starting.
+                Tap Test camera to see yourself and check your setup.
               </p>
             )}
             <h2 className="mt-4 text-xl font-extrabold text-[var(--sn-ink)]">
               Hi {candidateName}
             </h2>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <div className="rounded-lg border border-[var(--sn-line)] bg-white p-3">
-                <Camera className="h-5 w-5 text-[var(--sn-coral)]" />
-                <p className="mt-2 text-xs font-bold text-[var(--sn-ink)]">
-                  Video
+            {previewReady && (
+              <div className="mt-4 rounded-lg border border-[var(--sn-coral-100)] bg-[var(--sn-coral-50)] p-3">
+                <p className="text-sm font-extrabold text-[var(--sn-ink)]">
+                  Ready for your AI Screening? It&apos;s simple — you&apos;ll
+                  answer a few questions out loud.
+                </p>
+                <p className="mt-2 text-sm font-extrabold text-[var(--sn-coral-600)]">
+                  This session is recorded.
+                </p>
+                <p className="mt-1 text-xs leading-5 text-[var(--sn-coral-600)]">
+                  Your camera and microphone are recorded during this screening.
+                  Your spoken answers are converted to text, and your responses
+                  are reviewed by StaffingNation recruiters and automated (AI)
+                  tools to evaluate your fit for this role. The camera helps
+                  confirm a real person is completing the screening. Recordings
+                  and transcripts are stored securely. See our Privacy Policy and
+                  Terms.
                 </p>
               </div>
-              <div className="rounded-lg border border-[var(--sn-line)] bg-white p-3">
-                <Mic className="h-5 w-5 text-[var(--sn-blue)]" />
-                <p className="mt-2 text-xs font-bold text-[var(--sn-ink)]">
-                  Audio
-                </p>
-              </div>
-            </div>
-            <div className="mt-3 rounded-lg border border-[var(--sn-coral-100)] bg-[var(--sn-coral-50)] p-3">
-              <p className="text-sm font-extrabold text-[var(--sn-coral-600)]">
-                This is a recorded screening
-              </p>
-              <p className="mt-1 text-xs leading-5 text-[var(--sn-coral-600)]">
-                When you tap Start recorded screening, Spark records your camera,
-                microphone, and typed answers until you submit the interview.
-              </p>
-            </div>
+            )}
           </section>
         </div>
 
         <div className="sticky bottom-0 space-y-2 border-t border-[var(--sn-line)] bg-white p-4">
-          <div className="grid grid-cols-2 gap-2">
+          {!previewReady ? (
             <Button
               type="button"
-              variant="outline"
-              className="h-11 border-[var(--sn-line)] font-extrabold"
+              className="sn-button-coral h-12 w-full text-base font-extrabold"
               onClick={() => startCameraTest()}
               disabled={loading}
             >
@@ -663,30 +657,38 @@ export function SparkInterviewSession({
               )}
               Test camera
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="h-11 border-[var(--sn-line)] font-extrabold"
-              onClick={switchCamera}
-              disabled={loading || !previewReady}
-            >
-              <SwitchCamera className="h-4 w-4" />
-              Flip camera
-            </Button>
-          </div>
-          <Button
-            type="button"
-            className="sn-button-coral h-12 w-full text-base font-extrabold"
-            onClick={startInterview}
-            disabled={loading || !previewReady}
-          >
-            {loading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Play className="h-4 w-4" />
-            )}
-            Start recorded screening
-          </Button>
+          ) : (
+            <>
+              <p className="text-[11px] leading-4 text-[var(--sn-muted)]">
+                By pressing Start My AI Screening, you confirm you are the
+                applicant and consent to being recorded, transcribed, and
+                reviewed as described above.
+              </p>
+              <Button
+                type="button"
+                className="sn-button-coral h-12 w-full text-base font-extrabold"
+                onClick={startInterview}
+                disabled={loading}
+              >
+                {loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Play className="h-4 w-4" />
+                )}
+                Start My AI Screening
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 w-full border-[var(--sn-line)] font-extrabold"
+                onClick={switchCamera}
+                disabled={loading}
+              >
+                <SwitchCamera className="h-4 w-4" />
+                Flip camera
+              </Button>
+            </>
+          )}
         </div>
       </div>
     );

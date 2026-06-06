@@ -185,9 +185,10 @@ export default async function InterviewPage({
               </div>
             </div>
             <p className="mt-5 max-w-2xl text-lg leading-8 text-[var(--sn-muted)]">
-              {candidateName(application)} has been invited to complete the
-              short interview session. Answers are saved for recruiter review
-              after the session ends.
+              {candidateName(application)} has been invited to complete a short
+              AI Screening session. Answers are reviewed by AI and then by a
+              recruiter after the session has ended. We will follow up if you
+              are a fit for the position.
             </p>
           </div>
 
