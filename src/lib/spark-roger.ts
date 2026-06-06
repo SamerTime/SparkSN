@@ -388,7 +388,7 @@ export async function generateQuestionBankWithRoger(
     posting,
     requestedTarget
   );
-  let dashboard47Error: string | null = null;
+  const dashboard47Error: string | null = null;
 
   if (dashboard47QuestionBankConfigured()) {
     try {
@@ -410,10 +410,14 @@ export async function generateQuestionBankWithRoger(
         rogerFallbackReason: null,
       };
     } catch (error) {
-      dashboard47Error =
-        error instanceof Error
-          ? error.message
-          : "Dashboard47 Roger pipeline failed.";
+      // Fail loud: Roger is the configured generator, so a failure must surface
+      // to the recruiter rather than silently falling back to the deterministic
+      // template (per the no-silent-fallback rule).
+      throw new Error(
+        `Roger question-bank generation failed: ${
+          error instanceof Error ? error.message : "unknown error"
+        }`
+      );
     }
   }
 
@@ -680,4 +684,138 @@ export async function reviewScreeningWithRoger({
       roger.data.buildReviewNotes
     ),
   } as JsonValue;
+}
+
+// ---------------------------------------------------------------------------
+// Stage 2: per-candidate analysis via the KaizenIs analyze_responses pipeline.
+// Validates completeness and retries, then fails loud (no silent fallback).
+// ---------------------------------------------------------------------------
+
+export type RogerAnalysis = {
+  candidate_summary: string;
+  fit_assessment?: Array<{
+    skill_or_requirement: string;
+    evidence_summary: string;
+    rating: string;
+    confidence: string;
+  }>;
+  in_person_focus_areas: Array<{
+    area: string;
+    why: string;
+    suggested_probe: string;
+  }>;
+  recommended_next_step: string;
+  bias_notice: string;
+};
+
+export type AnalyzeResponsesInput = {
+  posting_id: string;
+  job_order_id: string;
+  application_id: string;
+  question_bank_id: string | null;
+  title: string;
+  overview: string | null;
+  responsibilities: string | null;
+  requirements: string | null;
+  qualifications: string | null;
+  skills: string[];
+  responses: Array<{
+    question_id?: string;
+    question_text: string;
+    answer_text: string;
+    duration_seconds?: number;
+  }>;
+};
+
+export type AnalyzeResponsesResult = {
+  analysis: RogerAnalysis;
+  mcpRunId: string | null;
+  modelName: string | null;
+};
+
+function requireDashboard47Env(name: string): string {
+  const value = process.env[name]?.trim();
+  if (!value) {
+    throw new Error(
+      `Missing ${name}. Set it to call the KaizenIs analyze_responses pipeline.`
+    );
+  }
+  return value;
+}
+
+function analysisIsComplete(value: unknown): value is RogerAnalysis {
+  const a = jsonObject(value);
+  return (
+    cleanText(a.candidate_summary).length > 0 &&
+    Array.isArray(a.in_person_focus_areas) &&
+    a.in_person_focus_areas.length === 3 &&
+    cleanText(a.recommended_next_step).length > 0
+  );
+}
+
+export async function analyzeResponsesWithRoger(
+  input: AnalyzeResponsesInput
+): Promise<AnalyzeResponsesResult> {
+  const baseUrl = requireDashboard47Env("DASHBOARD47_MCP_URL").replace(/\/+$/, "");
+  const apiKey = requireDashboard47Env("DASHBOARD47_MCP_API_KEY");
+  const endpoint = `${baseUrl}/api/v1/pipelines/analyze_responses/invoke`;
+
+  // The analyze_responses model intermittently drops array fields; validate and
+  // retry up to 3 times before failing loud, so a recruiter never sees a blank
+  // analysis and we never silently fall back to a non-Roger summary.
+  let lastReason = "no attempts made";
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({ input }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        run_id?: string;
+        status?: string;
+        output?: { type?: string; input?: Record<string, unknown> };
+        error_code?: string;
+        error_message?: string;
+      } | null;
+
+      if (!response.ok || !payload?.ok || payload.status !== "succeeded") {
+        lastReason =
+          payload?.error_message ||
+          payload?.error_code ||
+          payload?.status ||
+          `HTTP ${response.status}`;
+        continue;
+      }
+
+      if (payload.output?.type !== "tool_use" || !payload.output.input) {
+        lastReason = "unexpected output shape (expected tool_use)";
+        continue;
+      }
+
+      const candidate = payload.output.input;
+      if (!analysisIsComplete(candidate)) {
+        lastReason =
+          "incomplete analysis (missing summary, three focus areas, or next step)";
+        continue;
+      }
+
+      return {
+        analysis: candidate,
+        mcpRunId: cleanText(payload.run_id) || null,
+        modelName: "roger:analyze-responses-v1.0",
+      };
+    } catch (error) {
+      lastReason = error instanceof Error ? error.message : "request failed";
+    }
+  }
+
+  throw new Error(
+    `Roger response analysis failed after 3 attempts: ${lastReason}`
+  );
 }
