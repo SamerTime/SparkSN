@@ -86,8 +86,7 @@ export function SparkApplyForm({
     state: "",
     country: "US",
     availableToStart: "",
-    experienceSummary: "",
-    preferredChannel: "sms",
+    preferredChannel: "email",
     screeningPathway: "standard_ai" as ScreeningPathway,
     aiInterviewConsent: false,
     recordingConsent: false,
@@ -609,31 +608,12 @@ export function SparkApplyForm({
                   }
                   className="sn-input h-11 w-full px-3 text-sm"
                 >
-                  <option value="sms">Text</option>
                   <option value="email">Email</option>
                   <option value="phone">Call</option>
                 </select>
               </div>
             </div>
           </div>
-        </section>
-
-        <section className="sn-card p-4">
-          <h3 className="text-base font-extrabold text-[var(--sn-ink)]">
-            Relevant experience
-          </h3>
-          <p className="mt-1 text-xs leading-5 text-[var(--sn-muted)]">
-            A short note helps the recruiter review faster.
-          </p>
-          <textarea
-            id="experienceSummary"
-            value={form.experienceSummary}
-            onChange={(event) =>
-              updateField("experienceSummary", event.target.value)
-            }
-            placeholder="A few sentences about work you have done that relates to this role."
-            className="sn-input mt-3 min-h-28 w-full px-3 py-2 text-sm"
-          />
         </section>
 
         <section className="sn-card p-4">
