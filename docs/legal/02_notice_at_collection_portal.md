@@ -43,23 +43,25 @@ Required candidate-facing acknowledgement:
 > signals to support recruiter review, fraud prevention, and job-related
 > compliance checks. Human reviewers make final hiring decisions.
 
-### Option B: Manual recruiter review
+### Questions, accommodation, or human review
 
-The candidate requests a non-AI, human-reviewed alternative. Spark should
-disable required AI, camera, microphone, and browser geolocation consent for the
-initial application submission and queue the profile for manual recruiter
-handling.
+Candidates may contact compliance@tcwglobal.com with questions or to request an
+accommodation or human review where required by law. This should not be framed
+as an unlimited bypass of objective job-related screening. Applications may
+still be declined based on posted minimum qualifications, incomplete
+information, availability, location, legal requirements, or other lawful
+criteria.
 
 Required candidate-facing acknowledgement:
 
-> I request manual recruiter review instead of the standard AI-assisted workflow.
-> I understand a recruiter may review my application through a human-led process
-> and may contact me for written questions, a phone screen, or another
-> reasonable assessment.
+> If I have questions or need accommodation or human review, I can contact
+> compliance@tcwglobal.com. I understand that human review does not guarantee an
+> interview or advancement and that objective job-related requirements still
+> apply.
 
 ## Accessibility and fairness
 
 The choice portal should be readable on mobile devices, keyboard accessible,
 screen-reader friendly, and available before candidate data is submitted. The
-manual pathway should not use discouraging copy, extra friction, or dark
+compliance contact should not use discouraging copy, extra friction, or dark
 patterns.

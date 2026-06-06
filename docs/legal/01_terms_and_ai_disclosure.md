@@ -12,9 +12,10 @@ by counsel before final publication as a binding legal policy.
 
 Spark is a candidate intake and recruiter review workflow used for job
 opportunities published by StaffingNation. Spark may use automated workflow
-tools, AI-assisted summarization, and secure cloud infrastructure to help
-recruiters review job-related application materials. Spark does not make final
-hiring, firing, termination, or compensation decisions without human review.
+tools, AI-assisted transcript review, AI-assisted summarization, and secure
+cloud infrastructure to help recruiters review job-related application
+materials. Spark does not make final hiring, firing, termination, or
+compensation decisions without human review.
 
 ## AI-assisted screening
 
@@ -60,19 +61,21 @@ workflow.
 Spark does not sell candidate personal information. Spark is designed so that
 AI-assisted tools do not make final binding employment decisions.
 
-## Manual review and opt-out
+## Questions, accommodation, and human review
 
-Candidates may request a non-AI, human-reviewed application pathway. Choosing a
-manual pathway should not, by itself, penalize the candidate or remove the
-candidate from consideration. A manual pathway may involve recruiter review,
-written questions, a phone screen, or another reasonable human-led assessment.
+Candidates may contact compliance@tcwglobal.com with questions or to request
+accommodation or human review where required by law. A request does not
+guarantee an interview, video review, or advancement, and applications may still
+be declined based on objective, job-related requirements, incomplete
+information, availability, location, legal requirements, or other lawful
+criteria. Spark should not reject a candidate merely because the candidate made
+a legally protected request.
 
 ## Accommodations
 
 Candidates who need an accommodation because of disability, religious practice,
 accessibility needs, device constraints, or another protected reason may request
-assistance by contacting compliance@tcwglobal.com or by using the manual review
-pathway in Spark.
+assistance by contacting compliance@tcwglobal.com.
 
 ## Retention and deletion
 
