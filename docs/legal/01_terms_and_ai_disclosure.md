@@ -59,17 +59,23 @@ pathway for candidates who do not want to use the standard AI-assisted screening
 workflow.
 
 Spark does not sell candidate personal information. Spark is designed so that
-AI-assisted tools do not make final binding employment decisions.
+AI-assisted tools do not make final binding employment decisions. Candidates
+with questions or legally required accommodation needs may contact
+compliance@tcwglobal.com.
 
 ## Questions, accommodation, and human review
 
-Candidates may contact compliance@tcwglobal.com with questions or to request
-accommodation or human review where required by law. A request does not
-guarantee an interview, video review, or advancement, and applications may still
-be declined based on objective, job-related requirements, incomplete
-information, availability, location, legal requirements, or other lawful
-criteria. Spark should not reject a candidate merely because the candidate made
-a legally protected request.
+The only manual review request channel is email. Candidates who want to request
+manual review must email compliance@tcwglobal.com and attach a current resume.
+Compliance may forward the request and resume to recruiting for awareness or
+review. Spark does not promise a response, interview, video review, status
+update, or advancement from that request.
+
+Applications may still be declined based on objective, job-related
+requirements, incomplete information, availability, location, legal
+requirements, or other lawful criteria. Spark should not reject a candidate
+merely because the candidate made a legally protected accommodation or privacy
+request.
 
 ## Accommodations
 

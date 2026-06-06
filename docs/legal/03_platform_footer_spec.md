@@ -13,33 +13,36 @@ Recommended compact footer copy:
 > Spark uses permission-based device access and AI-assisted workflow tools to
 > support candidate screening, fraud prevention, and jurisdiction review. Final
 > hiring decisions are made by human reviewers. Eligible candidates may exercise
-> privacy rights, ask questions, or request accommodation or human review by
-> contacting compliance@tcwglobal.com.
+> privacy rights, ask questions, or request accommodation by contacting
+> compliance@tcwglobal.com. Manual review requests must be emailed to
+> compliance@tcwglobal.com with a current resume attached and may be forwarded to
+> recruiting without guaranteed follow-up.
 
 Required footer links:
 
 - California AI Disclosure & Terms
 - Notice at Collection
 - Your Privacy Choices / Do Not Sell or Share My Info
-- Questions, Accommodation, or Human Review
+- Questions, Accommodation, or Manual Review
 
 ## Privacy choices endpoint
 
 The privacy choices page should provide a clear way to request access,
 correction, deletion, restriction, sale/share opt-out, limitation of sensitive
-personal information where applicable, accommodation, and human review where
-required by law.
+personal information where applicable, and accommodation where required by law.
 
 If TCWGlobal or Cloud Motion Technologies maintains a centralized corporate
 privacy request form, the Spark privacy choices page should link to that form.
 Until then, it may route requests to compliance@tcwglobal.com.
 
-## Human review and accommodation contact
+## Manual review and accommodation contact
 
-The footer and apply flow should provide a clear compliance contact. It should
-not promise that every request receives a full human interview or video review.
-Copy should explain that objective job-related requirements still apply and that
-requests may be sent to compliance@tcwglobal.com.
+The footer and apply flow should provide a clear compliance contact. Manual
+review requests should route only through compliance@tcwglobal.com with the
+candidate's current resume attached. Copy should state that compliance may
+forward the request and resume to recruiting and that no response, interview,
+video review, status update, or advancement is guaranteed. Copy should also
+explain that objective job-related requirements still apply.
 
 ## Reapplication mitigation ledger
 

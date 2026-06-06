@@ -43,21 +43,27 @@ Required candidate-facing acknowledgement:
 > signals to support recruiter review, fraud prevention, and job-related
 > compliance checks. Human reviewers make final hiring decisions.
 
-### Questions, accommodation, or human review
+### Questions, accommodation, or manual review
 
-Candidates may contact compliance@tcwglobal.com with questions or to request an
-accommodation or human review where required by law. This should not be framed
-as an unlimited bypass of objective job-related screening. Applications may
-still be declined based on posted minimum qualifications, incomplete
-information, availability, location, legal requirements, or other lawful
-criteria.
+Candidates may contact compliance@tcwglobal.com with questions or accommodation
+requests. The only manual review request channel is email to
+compliance@tcwglobal.com with a current resume attached. Compliance may forward
+the request and resume to recruiting for awareness or review. The request does
+not guarantee a response, interview, video review, status update, or
+advancement.
+
+This should not be framed as an unlimited bypass of objective job-related
+screening. Applications may still be declined based on posted minimum
+qualifications, incomplete information, availability, location, legal
+requirements, or other lawful criteria.
 
 Required candidate-facing acknowledgement:
 
-> If I have questions or need accommodation or human review, I can contact
-> compliance@tcwglobal.com. I understand that human review does not guarantee an
-> interview or advancement and that objective job-related requirements still
-> apply.
+> If I have questions or need accommodation, I can contact
+> compliance@tcwglobal.com. If I request manual review, I must email
+> compliance@tcwglobal.com with my current resume attached. I understand the
+> request may be forwarded to recruiting and does not guarantee follow-up,
+> interview, video review, status update, or advancement.
 
 ## Accessibility and fairness
 
