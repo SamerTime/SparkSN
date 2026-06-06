@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Camera,
@@ -53,6 +54,10 @@ type Submission = {
   nextStep: string;
 };
 
+type ScreeningPathway = "standard_ai" | "manual_review";
+
+const SPARK_CONSENT_VERSION = "2026-06-06-v2";
+
 export function SparkApplyForm({
   postingSlug,
   postingTitle,
@@ -83,9 +88,11 @@ export function SparkApplyForm({
     availableToStart: "",
     experienceSummary: "",
     preferredChannel: "sms",
+    screeningPathway: "standard_ai" as ScreeningPathway,
     aiInterviewConsent: false,
     recordingConsent: false,
     geolocationConsent: false,
+    manualReviewAcknowledged: false,
   });
 
   const updateField = (
@@ -104,6 +111,33 @@ export function SparkApplyForm({
         ? "Consent checked. Tap capture location and allow the browser permission prompt."
         : "Check location consent below to enable capture."
     );
+  };
+
+  const updateScreeningPathway = (screeningPathway: ScreeningPathway) => {
+    setForm((current) => ({
+      ...current,
+      screeningPathway,
+      aiInterviewConsent:
+        screeningPathway === "standard_ai" ? current.aiInterviewConsent : false,
+      recordingConsent:
+        screeningPathway === "standard_ai" ? current.recordingConsent : false,
+      geolocationConsent:
+        screeningPathway === "standard_ai" ? current.geolocationConsent : false,
+      manualReviewAcknowledged:
+        screeningPathway === "manual_review"
+          ? current.manualReviewAcknowledged
+          : false,
+    }));
+    if (screeningPathway === "manual_review") {
+      setLocation(null);
+      setLocationCaptureState("idle");
+      setLocationStatus(
+        "Manual review selected. Browser location will not be requested for initial submission."
+      );
+      setBrowserLocationPermission("unknown");
+    } else {
+      setLocationStatus("Check location consent below to enable capture.");
+    }
   };
 
   useEffect(() => {
@@ -241,6 +275,7 @@ export function SparkApplyForm({
         body: JSON.stringify({
           postingSlug,
           ...form,
+          consentVersion: SPARK_CONSENT_VERSION,
           location,
           locationCapture: {
             status: locationCaptureState,
@@ -335,8 +370,11 @@ export function SparkApplyForm({
           locationCaptureState === "error"
         ? "text-[var(--sn-coral-600)]"
         : "text-[var(--sn-success)]";
-  const locationButtonLabel =
-    locationCaptureState === "captured"
+  const standardAiSelected = form.screeningPathway === "standard_ai";
+  const manualReviewSelected = form.screeningPathway === "manual_review";
+  const locationButtonLabel = manualReviewSelected
+    ? "Manual review selected"
+    : locationCaptureState === "captured"
       ? "Refresh location"
       : locationCaptureState === "denied"
         ? "Retry location"
@@ -349,6 +387,9 @@ export function SparkApplyForm({
         : form.geolocationConsent && browserLocationPermission === "prompt"
           ? "Consent granted; browser will ask for permission."
           : "";
+  const submitLabel = manualReviewSelected
+    ? "Request manual recruiter review"
+    : "Submit for AI-assisted recruiter review";
 
   return (
     <form onSubmit={submit} className="flex min-h-[720px] flex-col bg-[var(--sn-soft)]">
@@ -383,13 +424,95 @@ export function SparkApplyForm({
           <div className="flex items-start justify-between gap-3">
             <div>
               <h3 className="text-base font-extrabold text-[var(--sn-ink)]">
+                Notice and screening pathway
+              </h3>
+              <p className="mt-1 text-xs leading-5 text-[var(--sn-muted)]">
+                Review the{" "}
+                <Link
+                  href="/notice-at-collection"
+                  className="font-bold text-[var(--sn-blue-700)] underline-offset-4 hover:underline"
+                  target="_blank"
+                >
+                  Notice at Collection
+                </Link>{" "}
+                and choose how Spark should process this application.
+              </p>
+            </div>
+            <span className="sn-chip sn-chip-coral">Step 1</span>
+          </div>
+
+          <div className="mt-4 grid gap-3">
+            <label
+              className={`block rounded-lg border p-3 ${
+                standardAiSelected
+                  ? "border-[var(--sn-blue-200)] bg-[var(--sn-blue-50)]"
+                  : "border-[var(--sn-line)] bg-white"
+              }`}
+            >
+              <span className="flex items-start gap-3">
+                <input
+                  type="radio"
+                  name="screeningPathway"
+                  value="standard_ai"
+                  checked={standardAiSelected}
+                  onChange={() => updateScreeningPathway("standard_ai")}
+                  className="mt-1 h-4 w-4 shrink-0 accent-[var(--sn-blue)]"
+                />
+                <span>
+                  <span className="block text-sm font-extrabold text-[var(--sn-ink)]">
+                    Standard AI-assisted workflow
+                  </span>
+                  <span className="mt-1 block text-xs leading-5 text-[var(--sn-muted)]">
+                    Spark may use AI-assisted tools and permission-based device
+                    signals to support recruiter review. Human reviewers make
+                    final hiring decisions.
+                  </span>
+                </span>
+              </span>
+            </label>
+
+            <label
+              className={`block rounded-lg border p-3 ${
+                manualReviewSelected
+                  ? "border-[var(--sn-coral-100)] bg-[var(--sn-coral-50)]"
+                  : "border-[var(--sn-line)] bg-white"
+              }`}
+            >
+              <span className="flex items-start gap-3">
+                <input
+                  type="radio"
+                  name="screeningPathway"
+                  value="manual_review"
+                  checked={manualReviewSelected}
+                  onChange={() => updateScreeningPathway("manual_review")}
+                  className="mt-1 h-4 w-4 shrink-0 accent-[var(--sn-coral)]"
+                />
+                <span>
+                  <span className="block text-sm font-extrabold text-[var(--sn-ink)]">
+                    Manual recruiter review
+                  </span>
+                  <span className="mt-1 block text-xs leading-5 text-[var(--sn-muted)]">
+                    Request a human-led review pathway without standard AI
+                    screening acknowledgements or initial camera, microphone, or
+                    browser location capture.
+                  </span>
+                </span>
+              </span>
+            </label>
+          </div>
+        </section>
+
+        <section className="sn-card p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-base font-extrabold text-[var(--sn-ink)]">
                 Your profile
               </h3>
               <p className="mt-1 text-xs leading-5 text-[var(--sn-muted)]">
                 Used by recruiters for this Spark application only.
               </p>
             </div>
-            <span className="sn-chip sn-chip-coral">Step 1</span>
+            <span className="sn-chip sn-chip-coral">Step 2</span>
           </div>
 
           <div className="mt-4 grid gap-3">
@@ -521,8 +644,9 @@ export function SparkApplyForm({
                 Screening readiness
               </h3>
               <p className="mt-1 text-xs leading-5 text-[var(--sn-muted)]">
-                These checks support the future short mobile interview and
-                recruiter fraud review.
+                {manualReviewSelected
+                  ? "Manual review keeps device permissions off for initial submission."
+                  : "These checks support the future short mobile interview and recruiter fraud review."}
               </p>
             </div>
           </div>
@@ -535,7 +659,9 @@ export function SparkApplyForm({
                   Camera
                 </p>
                 <p className="text-xs text-[var(--sn-muted)]">
-                  Needed only after recruiter approval.
+                  {manualReviewSelected
+                    ? "Not requested for manual review submission."
+                    : "Needed only after recruiter approval."}
                 </p>
               </div>
             </div>
@@ -546,7 +672,9 @@ export function SparkApplyForm({
                   Microphone
                 </p>
                 <p className="text-xs text-[var(--sn-muted)]">
-                  Used for the short video answers.
+                  {manualReviewSelected
+                    ? "Not requested for manual review submission."
+                    : "Used for the short video answers."}
                 </p>
               </div>
             </div>
@@ -572,7 +700,11 @@ export function SparkApplyForm({
                 variant="outline"
                 className="mt-3 h-10 w-full border-[var(--sn-line)]"
                 onClick={captureLocation}
-                disabled={capturingLocation || !form.geolocationConsent}
+                disabled={
+                  capturingLocation ||
+                  !form.geolocationConsent ||
+                  manualReviewSelected
+                }
               >
                 {capturingLocation ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -589,52 +721,100 @@ export function SparkApplyForm({
 
         <section className="sn-card p-4">
           <h3 className="text-base font-extrabold text-[var(--sn-ink)]">
-            Consent
+            Consent and acknowledgement
           </h3>
-          <div className="mt-3 grid gap-3 text-sm text-[var(--sn-ink-2)]">
-            <label className="flex gap-3">
-              <input
-                type="checkbox"
-                checked={form.aiInterviewConsent}
-                onChange={(event) =>
-                  updateField("aiInterviewConsent", event.target.checked)
-                }
-                className="mt-1 h-4 w-4 shrink-0 accent-[var(--sn-blue)]"
-                required
-              />
-              <span>I consent to a short AI-assisted interview for this job.</span>
-            </label>
-            <label className="flex gap-3">
-              <input
-                type="checkbox"
-                checked={form.recordingConsent}
-                onChange={(event) =>
-                  updateField("recordingConsent", event.target.checked)
-                }
-                className="mt-1 h-4 w-4 shrink-0 accent-[var(--sn-blue)]"
-                required
-              />
-              <span>
-                I consent to camera and microphone recording when I start the
-                interview.
-              </span>
-            </label>
-            <label className="flex gap-3">
-              <input
-                type="checkbox"
-                checked={form.geolocationConsent}
-                onChange={(event) =>
-                  updateGeolocationConsent(event.target.checked)
-                }
-                className="mt-1 h-4 w-4 shrink-0 accent-[var(--sn-blue)]"
-                required
-              />
-              <span>
-                I consent to Spark requesting browser location for identity,
-                fraud, and job-fit review.
-              </span>
-            </label>
-          </div>
+          <p className="mt-1 text-xs leading-5 text-[var(--sn-muted)]">
+            Consent version {SPARK_CONSENT_VERSION}. Read the{" "}
+            <Link
+              href="/terms"
+              className="font-bold text-[var(--sn-blue-700)] underline-offset-4 hover:underline"
+              target="_blank"
+            >
+              California AI Disclosure & Terms
+            </Link>{" "}
+            and{" "}
+            <Link
+              href="/privacy-choices"
+              className="font-bold text-[var(--sn-blue-700)] underline-offset-4 hover:underline"
+              target="_blank"
+            >
+              privacy choices
+            </Link>
+            .
+          </p>
+
+          {standardAiSelected ? (
+            <div className="mt-3 grid gap-3 text-sm text-[var(--sn-ink-2)]">
+              <label className="flex gap-3">
+                <input
+                  type="checkbox"
+                  checked={form.aiInterviewConsent}
+                  onChange={(event) =>
+                    updateField("aiInterviewConsent", event.target.checked)
+                  }
+                  className="mt-1 h-4 w-4 shrink-0 accent-[var(--sn-blue)]"
+                  required
+                />
+                <span>
+                  I choose the standard Spark workflow and consent to
+                  AI-assisted recruiter support for this job.
+                </span>
+              </label>
+              <label className="flex gap-3">
+                <input
+                  type="checkbox"
+                  checked={form.recordingConsent}
+                  onChange={(event) =>
+                    updateField("recordingConsent", event.target.checked)
+                  }
+                  className="mt-1 h-4 w-4 shrink-0 accent-[var(--sn-blue)]"
+                  required
+                />
+                <span>
+                  I consent to camera and microphone recording when I start the
+                  interview.
+                </span>
+              </label>
+              <label className="flex gap-3">
+                <input
+                  type="checkbox"
+                  checked={form.geolocationConsent}
+                  onChange={(event) =>
+                    updateGeolocationConsent(event.target.checked)
+                  }
+                  className="mt-1 h-4 w-4 shrink-0 accent-[var(--sn-blue)]"
+                  required
+                />
+                <span>
+                  I consent to Spark requesting browser location for identity,
+                  fraud, jurisdiction, and job-fit review.
+                </span>
+              </label>
+            </div>
+          ) : (
+            <div className="mt-3 grid gap-3 text-sm text-[var(--sn-ink-2)]">
+              <label className="flex gap-3 rounded-lg border border-[var(--sn-coral-100)] bg-[var(--sn-coral-50)] p-3">
+                <input
+                  type="checkbox"
+                  checked={form.manualReviewAcknowledged}
+                  onChange={(event) =>
+                    updateField(
+                      "manualReviewAcknowledged",
+                      event.target.checked
+                    )
+                  }
+                  className="mt-1 h-4 w-4 shrink-0 accent-[var(--sn-coral)]"
+                  required
+                />
+                <span>
+                  I request manual recruiter review instead of the standard
+                  AI-assisted workflow. I understand a recruiter may contact me
+                  for written questions, a phone screen, or another human-led
+                  assessment.
+                </span>
+              </label>
+            </div>
+          )}
         </section>
       </div>
 
@@ -645,7 +825,7 @@ export function SparkApplyForm({
           className="sn-button-coral h-12 w-full text-base font-extrabold"
         >
           {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-          Submit for recruiter review
+          {submitLabel}
         </Button>
       </div>
     </form>

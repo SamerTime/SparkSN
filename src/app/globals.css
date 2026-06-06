@@ -319,4 +319,52 @@
   .spark-stage-line.is-current {
     background: var(--sn-coral);
   }
+
+  .legal-content {
+    color: var(--sn-ink-2);
+  }
+
+  .legal-content section + section {
+    margin-top: 2rem;
+  }
+
+  .legal-content h2 {
+    color: var(--sn-ink);
+    font-size: 1.25rem;
+    font-weight: 800;
+    line-height: 1.3;
+  }
+
+  .legal-content h3 {
+    color: var(--sn-ink);
+    font-size: 1rem;
+    font-weight: 800;
+    line-height: 1.35;
+  }
+
+  .legal-content p {
+    margin-top: 0.8rem;
+    max-width: 72ch;
+    font-size: 0.95rem;
+    line-height: 1.75;
+    color: var(--sn-muted);
+  }
+
+  .legal-content ul {
+    margin-top: 0.8rem;
+    display: grid;
+    gap: 0.45rem;
+    padding-left: 1.2rem;
+    color: var(--sn-muted);
+    font-size: 0.95rem;
+    line-height: 1.65;
+    list-style: disc;
+  }
+
+  .legal-content a {
+    color: var(--sn-blue-700);
+    font-weight: 800;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
 }

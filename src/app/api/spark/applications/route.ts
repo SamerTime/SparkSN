@@ -60,18 +60,31 @@ const EARLY_APPLICATION_STATUSES = new Set<SparkApplicationStatus>([
   "Invited",
 ]);
 
+const SPARK_CONSENT_VERSION = "2026-06-06-v2";
+const STANDARD_AI_PATHWAY = "standard_ai";
+const MANUAL_REVIEW_PATHWAY = "manual_review";
+
 function applicationStatusForApply(
   existingStatus: SparkApplicationStatus | undefined,
-  invited: boolean
+  invited: boolean,
+  manualReviewRequested: boolean
 ): SparkApplicationStatus {
   if (existingStatus && !EARLY_APPLICATION_STATUSES.has(existingStatus)) {
     return existingStatus;
   }
 
+  if (manualReviewRequested) return "RecruiterReview";
   return invited ? "Invited" : "Applied";
 }
 
-function locationReviewReason(status: string, captured: boolean) {
+function locationReviewReason(
+  status: string,
+  captured: boolean,
+  geolocationConsent: boolean
+) {
+  if (!geolocationConsent) {
+    return "Candidate requested manual review; browser location was not requested.";
+  }
   if (captured) return "Browser location captured with candidate consent.";
   if (status === "denied") {
     return "Candidate consented, but browser location permission was denied.";
@@ -102,6 +115,13 @@ export async function POST(request: NextRequest) {
     const aiInterviewConsent = booleanValue(body.aiInterviewConsent);
     const recordingConsent = booleanValue(body.recordingConsent);
     const geolocationConsent = booleanValue(body.geolocationConsent);
+    const screeningPathway = stringValue(body.screeningPathway);
+    const manualReviewRequested = screeningPathway === MANUAL_REVIEW_PATHWAY;
+    const standardAiRequested =
+      !screeningPathway || screeningPathway === STANDARD_AI_PATHWAY;
+    const resolvedScreeningPathway = manualReviewRequested
+      ? MANUAL_REVIEW_PATHWAY
+      : STANDARD_AI_PATHWAY;
     const now = new Date().toISOString();
 
     if (!postingSlug) {
@@ -125,12 +145,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!aiInterviewConsent || !recordingConsent || !geolocationConsent) {
+    if (
+      !manualReviewRequested &&
+      (!standardAiRequested ||
+        !aiInterviewConsent ||
+        !recordingConsent ||
+        !geolocationConsent)
+    ) {
       return NextResponse.json(
         {
           success: false,
           error:
-            "AI interview, recording, and location review consent are required for Spark applications.",
+            "AI interview, recording, and location review consent are required for the standard Spark workflow. Choose manual review if you do not consent to the standard workflow.",
         },
         { status: 400 }
       );
@@ -180,9 +206,19 @@ export async function POST(request: NextRequest) {
       experienceSummary,
       availableToStart,
       preferredChannel,
+      screeningPathway: resolvedScreeningPathway,
+      consentVersion: SPARK_CONSENT_VERSION,
       lastAppliedPostingSlug: posting.slug,
       lastAppliedPostingTitle: posting.title,
     };
+
+    const candidateConsentTimestamps = manualReviewRequested
+      ? {}
+      : {
+          geolocationConsentAt: now,
+          aiInterviewConsentAt: now,
+          recordingConsentAt: now,
+        };
 
     const candidate = await upsertCandidateProfileByEmail(email, {
       firstName,
@@ -192,10 +228,10 @@ export async function POST(request: NextRequest) {
       state,
       country,
       profileData,
-      geolocationConsentAt: now,
-      aiInterviewConsentAt: now,
-      recordingConsentAt: now,
+      ...candidateConsentTimestamps,
       fraudReviewData: {
+        screeningPathway: resolvedScreeningPathway,
+        consentVersion: SPARK_CONSENT_VERSION,
         locationCaptured: Boolean(browserLocation),
         locationCaptureAt: browserLocation ? now : null,
         locationCaptureStatus,
@@ -210,7 +246,8 @@ export async function POST(request: NextRequest) {
     const invitation = await findJobInvitationByPostingAndEmail(posting.id, email);
     const applicationStatus = applicationStatusForApply(
       existingApplication?.status,
-      Boolean(invitation)
+      Boolean(invitation),
+      manualReviewRequested
     );
 
     const candidateName = `${firstName} ${lastName}`;
@@ -221,7 +258,9 @@ export async function POST(request: NextRequest) {
         country,
       },
       browserGeolocation: browserLocation,
-      consentAt: now,
+      consentAt: geolocationConsent ? now : null,
+      screeningPathway: resolvedScreeningPathway,
+      consentVersion: SPARK_CONSENT_VERSION,
       capture: {
         status: browserLocation ? "captured" : locationCaptureStatus,
         message: locationCaptureMessage,
@@ -231,7 +270,8 @@ export async function POST(request: NextRequest) {
         needsLocationReview: !browserLocation,
         reason: locationReviewReason(
           locationCaptureStatus,
-          Boolean(browserLocation)
+          Boolean(browserLocation),
+          geolocationConsent
         ),
       },
     };
@@ -239,6 +279,8 @@ export async function POST(request: NextRequest) {
       userAgent: request.headers.get("user-agent"),
       acceptLanguage: request.headers.get("accept-language"),
       browser: browserSignals,
+      screeningPathway: resolvedScreeningPathway,
+      consentVersion: SPARK_CONSENT_VERSION,
       submittedAt: now,
     };
     const communicationState = appendCommunicationEvents(
@@ -252,7 +294,11 @@ export async function POST(request: NextRequest) {
           at: now,
           channel: preferredChannel,
           messagePreview:
-            "Thanks for applying. A recruiter will review your profile before the short interview step.",
+            manualReviewRequested
+              ? "Manual review requested. A recruiter will review this application through a human-led pathway."
+              : "Thanks for applying. A recruiter will review your profile before the short interview step.",
+          screeningPathway: resolvedScreeningPathway,
+          consentVersion: SPARK_CONSENT_VERSION,
         },
         ...(invitation
           ? [
@@ -272,7 +318,11 @@ export async function POST(request: NextRequest) {
           at: now,
           channel: "internal",
           messagePreview:
-            "Review profile, confirm fit, then approve or invite to interview.",
+            manualReviewRequested
+              ? "Manual review requested. Do not route this candidate through standard AI-assisted screening without updated consent."
+              : "Review profile, confirm fit, then approve or invite to interview.",
+          screeningPathway: resolvedScreeningPathway,
+          consentVersion: SPARK_CONSENT_VERSION,
         },
       ],
       preferredChannel
@@ -329,7 +379,9 @@ export async function POST(request: NextRequest) {
       applicationId: application.id,
       status: application.status,
       nextStep:
-        "Your profile is queued for recruiter review. If approved, Spark will send the short interview link.",
+        manualReviewRequested
+          ? "Your profile is queued for manual recruiter review. A recruiter may contact you for next steps."
+          : "Your profile is queued for recruiter review. If approved, Spark will send the short interview link.",
     });
   } catch (error) {
     console.error("Spark application error:", error);

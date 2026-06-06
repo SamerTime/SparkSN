@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ShieldCheck, Sparkles } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import { SparkLogo } from "@/components/spark/SparkBrand";
 
 export default function Footer() {
@@ -12,6 +12,13 @@ export default function Footer() {
             <p className="max-w-md text-sm leading-6 text-white/60">
               Published StaffingNation roles, Spark candidate profiles,
               recruiter review, and short AI interview workflows.
+            </p>
+            <p className="max-w-xl text-xs leading-5 text-white/50">
+              Spark uses permission-based device access and AI-assisted workflow
+              tools to support candidate screening, fraud prevention, and
+              jurisdiction review. Final hiring decisions are made by human
+              reviewers. Eligible candidates may exercise privacy rights or
+              request manual review without penalty.
             </p>
             <div className="flex items-center gap-2 text-xs text-white/55">
               <ShieldCheck className="h-3.5 w-3.5 text-[var(--sn-blue-400)]" />
@@ -50,20 +57,37 @@ export default function Footer() {
 
           <div>
             <h3 className="mb-3 text-xs font-extrabold uppercase tracking-normal text-white">
-              Build focus
+              Candidate rights
             </h3>
             <ul className="space-y-2 text-sm text-white/65">
-              <li className="flex items-center gap-2">
-                <Sparkles className="h-3.5 w-3.5 text-[var(--sn-coral)]" />
-                Public job postings
+              <li>
+                <Link href="/terms" className="transition hover:text-white">
+                  California AI Disclosure & Terms
+                </Link>
               </li>
-              <li className="flex items-center gap-2">
-                <Sparkles className="h-3.5 w-3.5 text-[var(--sn-coral)]" />
-                Mobile interview links
+              <li>
+                <Link
+                  href="/notice-at-collection"
+                  className="transition hover:text-white"
+                >
+                  Notice at Collection
+                </Link>
               </li>
-              <li className="flex items-center gap-2">
-                <Sparkles className="h-3.5 w-3.5 text-[var(--sn-coral)]" />
-                Recruiter-ready AI summaries
+              <li>
+                <Link
+                  href="/privacy-choices"
+                  className="transition hover:text-white"
+                >
+                  Your Privacy Choices / Do Not Sell or Share My Info
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/manual-review"
+                  className="transition hover:text-white"
+                >
+                  Request Non-AI Alternative Pathway
+                </Link>
               </li>
             </ul>
           </div>
