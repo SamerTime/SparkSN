@@ -11,7 +11,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { toast } from "sonner";
-import { SparkLogoMark } from "@/components/spark/SparkBrand";
+import { SparkLogo } from "@/components/spark/SparkBrand";
 
 const NAV = [
   { href: "/spark/recruiter", label: "Jobs", icon: Briefcase, exact: true },
@@ -50,14 +50,9 @@ export function SparkRecruiterNav({ email }: { email: string | null }) {
 
   return (
     <header className="sticky top-0 z-40 border-b border-[var(--sn-line)] bg-white/90 backdrop-blur">
-      <div className="sn-container flex h-14 items-center justify-between gap-4">
+      <div className="sn-container flex h-16 items-center justify-between gap-4">
         <div className="flex items-center gap-6">
-          <Link href="/spark/recruiter" className="flex items-center gap-2">
-            <SparkLogoMark className="h-7 w-8 shrink-0" />
-            <span className="text-sm font-extrabold tracking-tight text-[var(--sn-ink)]">
-              Spark
-            </span>
-          </Link>
+          <SparkLogo href="/spark/recruiter" />
           <nav className="flex items-center gap-1">
             {NAV.map((item) => {
               const active = item.exact

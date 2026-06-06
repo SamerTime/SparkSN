@@ -1,11 +1,18 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { ShieldCheck } from "lucide-react";
 import { Button } from "./ui/button";
 import { SparkLogo } from "@/components/spark/SparkBrand";
 
 export default function Navbar() {
+  const pathname = usePathname();
+  // Recruiter pages render their own consolidated header (SparkRecruiterNav).
+  if (pathname?.startsWith("/spark/recruiter")) {
+    return null;
+  }
+
   return (
     <nav
       role="navigation"
