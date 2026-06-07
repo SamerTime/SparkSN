@@ -40,6 +40,19 @@ const ACTIONS: Record<string, ActionConfig> = {
     messagePreview:
       "Spark interview instructions were sent through Courier and Postmark.",
   },
+  reinvite: {
+    eventType: "interview_reinvite_sent",
+    label: "Interview re-invite sent",
+    channel: "candidate",
+    messagePreview:
+      "A fresh Spark interview link was re-sent through Courier and Postmark.",
+  },
+  update_email: {
+    eventType: "candidate_email_updated",
+    label: "Candidate email updated",
+    channel: "internal",
+    messagePreview: "Recruiter corrected the candidate contact email.",
+  },
   decline: {
     status: "Declined",
     eventType: "candidate_declined",
@@ -193,11 +206,20 @@ export async function PATCH(
   { params }: { params: Promise<{ applicationId: string }> }
 ) {
   try {
+    const recruiter = await getSparkRecruiterUser();
+    if (!recruiter) {
+      return NextResponse.json(
+        { success: false, error: "Recruiter login required." },
+        { status: 401 }
+      );
+    }
+
     const { applicationId } = await params;
     const body = await request.json();
     const action = stringValue(body.action);
     const recruiterNotes = stringValue(body.recruiterNotes);
     const requestedStatus = stringValue(body.status);
+    const requestedEmail = stringValue(body.email).trim().toLowerCase();
     const config =
       action === "set_status"
         ? WORKFLOW_STATUSES[requestedStatus]
@@ -216,6 +238,16 @@ export async function PATCH(
       return NextResponse.json(
         { success: false, error: "Application not found." },
         { status: 404 }
+      );
+    }
+
+    if (
+      action === "update_email" &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(requestedEmail)
+    ) {
+      return NextResponse.json(
+        { success: false, error: "Enter a valid email address." },
+        { status: 400 }
       );
     }
 
@@ -317,6 +349,78 @@ export async function PATCH(
         application.interviewMedia,
         session
       ) as JsonValue;
+    } else if (action === "reinvite") {
+      if (!application.candidateEmail) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Candidate email is required before resending an invite.",
+          },
+          { status: 400 }
+        );
+      }
+      if (!application.posting) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Spark posting details are required to resend an invite.",
+          },
+          { status: 400 }
+        );
+      }
+      const existingSession = jsonObject(
+        jsonObject(application.interviewMedia).session
+      );
+      const interviewUrl = stringValue(existingSession.inviteUrl);
+      if (!interviewUrl) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "No interview invite to resend yet — send the invite first.",
+          },
+          { status: 400 }
+        );
+      }
+      delivery = await sendSparkInterviewInvite({
+        applicationId,
+        recipientEmail: application.candidateEmail,
+        candidateName: application.candidateName,
+        jobTitle: application.posting.title,
+        clientName: application.posting.clientName,
+        interviewUrl,
+      });
+      if (!delivery.ok) {
+        const failedState = appendEvent(
+          application.communicationState,
+          {
+            type: "interview_reinvite_failed",
+            label: "Interview re-invite failed",
+            at: now,
+            channel: "candidate",
+            messagePreview: `Courier/Postmark email did not send (${delivery.errorCode}).`,
+            delivery: {
+              provider: "courier",
+              downstreamProvider: "postmark",
+              status: "failed",
+              errorCode: delivery.errorCode,
+            },
+          },
+          false
+        );
+        await updateApplication(
+          applicationId,
+          { communicationState: failedState as JsonValue },
+          "id,status"
+        );
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Unable to resend the interview invite email.",
+            code: delivery.errorCode,
+          },
+          { status: 502 }
+        );
+      }
     }
 
     const communicationState = appendEvent(application.communicationState, {
@@ -332,13 +436,16 @@ export async function PATCH(
       applicationId,
       {
         ...(config.status ? { status: config.status } : {}),
-        recruiterNotes,
+        ...(body.recruiterNotes !== undefined ? { recruiterNotes } : {}),
         communicationState: communicationState as JsonValue,
         ...(action === "invite_interview"
           ? { interviewMedia: application.interviewMedia }
           : {}),
+        ...(action === "update_email"
+          ? { candidateEmail: requestedEmail }
+          : {}),
       },
-      "id,status,recruiterNotes"
+      "id,status,recruiterNotes,candidateEmail"
     );
 
     return NextResponse.json({
