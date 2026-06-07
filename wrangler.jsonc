@@ -7,6 +7,9 @@
   "workers_dev": false,
   "preview_urls": false,
   "keep_vars": true,
+  "ai": {
+    "binding": "AI"
+  },
   "vars": {
     "SUPABASE_URL": "https://xmidhrqlfsnkhoadpgsh.supabase.co",
     "NEXT_PUBLIC_SUPABASE_URL": "https://xmidhrqlfsnkhoadpgsh.supabase.co",
