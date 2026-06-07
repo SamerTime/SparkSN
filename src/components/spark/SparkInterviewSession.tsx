@@ -6,6 +6,7 @@ import {
   Camera,
   CheckCircle2,
   Loader2,
+  Pencil,
   PhoneOff,
   Play,
   Send,
@@ -36,6 +37,18 @@ type Answer = {
   targetSeconds?: number;
   generatorLabel?: string;
   mcpRunId?: string | null;
+  mode?: "spoken" | "typed";
+  reason?: string;
+  clipPath?: string;
+};
+
+type TypedReason = "accessibility" | "technical" | "cant_speak" | "other";
+
+const TYPED_REASON_LABELS: Record<TypedReason, string> = {
+  accessibility: "Accessibility",
+  technical: "Technical issue (mic/camera)",
+  cant_speak: "Can't speak aloud right now",
+  other: "Other",
 };
 
 type InterviewQuestion = {
@@ -183,6 +196,9 @@ export function SparkInterviewSession({
     mimeType: "",
     sizeBytes: 0,
   });
+  const [questionMode, setQuestionMode] = useState<"spoken" | "typed">("spoken");
+  const [typedReason, setTypedReason] = useState<TypedReason>("cant_speak");
+  const [reasonOpen, setReasonOpen] = useState(false);
 
   const currentQuestion = questions[questionIndex] || questions[0];
   const currentQuestionText = currentQuestion?.text || "";
@@ -442,87 +458,176 @@ export function SparkInterviewSession({
     return capture;
   };
 
-  const uploadRecording = async (capture: RecordingCapture) => {
-    if (!capture.captured || !capture.blob) {
-      return {
-        captured: false,
-        durationSeconds: capture.durationSeconds,
-        mimeType: capture.mimeType,
-        sizeBytes: capture.sizeBytes,
+  const beginQuestionRecording = () => {
+    const stream = streamRef.current;
+    if (!stream) return;
+    startRecording(stream);
+    const startedAt = Date.now();
+    startedAtRef.current = startedAt;
+    setRecordingElapsed(0);
+    if (timerRef.current) window.clearInterval(timerRef.current);
+    timerRef.current = window.setInterval(() => {
+      setRecordingElapsed(
+        Math.max(1, Math.round((Date.now() - startedAt) / 1000))
+      );
+    }, 1000);
+  };
+
+  const stopAndDiscardRecording = () => {
+    const recorder = recorderRef.current;
+    if (recorder && recorder.state !== "inactive") {
+      recorder.onstop = null;
+      recorder.stop();
+    }
+    if (timerRef.current) window.clearInterval(timerRef.current);
+    chunksRef.current = [];
+  };
+
+  // Pencil: this question becomes a typed accessibility exception.
+  const switchToTyped = (reason: TypedReason) => {
+    stopAndDiscardRecording();
+    setTypedReason(reason);
+    setQuestionMode("typed");
+    setReasonOpen(false);
+    setCurrentAnswer("");
+  };
+
+  const switchToSpoken = () => {
+    setQuestionMode("spoken");
+    setReasonOpen(false);
+    setCurrentAnswer("");
+    beginQuestionRecording();
+  };
+
+  // Submit the current question. Spoken: stop the clip, upload it, transcribe
+  // (via the /answer endpoint). Typed: send the flagged exception. Returns the
+  // updated answers array (used directly to avoid stale state), or null.
+  const submitAnswer = async (): Promise<Answer[] | null> => {
+    setLoading(true);
+    try {
+      const meta = {
+        question: currentQuestionText,
+        questionId: currentQuestion?.id,
+        source: currentQuestion?.source,
+        sourceLabel: currentQuestion?.sourceLabel,
+        type: currentQuestion?.type,
+        targetSeconds: currentQuestion?.targetSeconds || 60,
+        generatorLabel: currentQuestion?.generatorLabel,
+        mcpRunId: currentQuestion?.mcpRunId,
       };
-    }
 
-    const contentType = storageContentType(capture.mimeType);
-    const upload = await uploadRecordingBlob(capture.blob, contentType);
+      let answer: Answer;
+      if (questionMode === "typed") {
+        const text = currentAnswer.trim();
+        if (!text) {
+          toast.error("Type your answer, or switch back to video.");
+          return null;
+        }
+        const res = await fetch(`/api/spark/interviews/${token}/answer`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            questionIndex,
+            questionId: currentQuestion?.id,
+            question: currentQuestionText,
+            mode: "typed",
+            typedAnswer: text,
+            reason: typedReason,
+          }),
+        });
+        const result = await res.json();
+        if (!res.ok || !result.success) {
+          throw new Error(result.error || "Unable to save the answer.");
+        }
+        answer = { ...meta, answer: text, mode: "typed", reason: typedReason };
+      } else {
+        const capture = await stopRecorder();
+        if (!capture.blob || !capture.blob.size) {
+          toast.error(
+            "No recording was captured — try again, or tap the pencil to type."
+          );
+          return null;
+        }
+        const upload = await uploadRecordingBlob(
+          capture.blob,
+          capture.mimeType || "video/webm"
+        );
+        const res = await fetch(`/api/spark/interviews/${token}/answer`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            questionIndex,
+            questionId: currentQuestion?.id,
+            question: currentQuestionText,
+            mode: "spoken",
+            recording: {
+              storage: { bucket: upload.bucket, path: upload.path },
+              durationSeconds: capture.durationSeconds,
+              mimeType: upload.mimeType,
+            },
+          }),
+        });
+        const result = await res.json();
+        if (!res.ok || !result.success) {
+          throw new Error(result.error || "Unable to save the answer.");
+        }
+        const transcript =
+          typeof result.answer?.transcript === "string"
+            ? result.answer.transcript
+            : "";
+        answer = {
+          ...meta,
+          answer: transcript,
+          mode: "spoken",
+          clipPath: upload.path,
+        };
+      }
 
-    return {
-      captured: true,
-      durationSeconds: capture.durationSeconds,
-      mimeType: contentType,
-      sizeBytes: capture.sizeBytes,
-      uploadStrategy: "final_recording_with_background_chunks",
-      storage: {
-        bucket: upload.bucket,
-        path: upload.path,
-        uploadedAt: new Date().toISOString(),
-      },
-      chunks: chunkUploadsRef.current,
-      chunkUploadSummary: {
-        uploadedChunks: chunkUploadsRef.current.length,
-        failedChunks: failedChunkUploadsRef.current,
-      },
-    };
-  };
-
-  const saveCurrentAnswer = () => {
-    const answer = currentAnswer.trim();
-    if (!answer) {
-      toast.error("Please answer this question before continuing.");
+      const nextAnswers = [...answers];
+      nextAnswers[questionIndex] = answer;
+      setAnswers(nextAnswers);
+      return nextAnswers;
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Unable to save the answer."
+      );
       return null;
+    } finally {
+      setLoading(false);
     }
-
-    const nextAnswers = [...answers];
-    nextAnswers[questionIndex] = {
-      question: currentQuestionText,
-      answer,
-      questionId: currentQuestion?.id,
-      source: currentQuestion?.source,
-      sourceLabel: currentQuestion?.sourceLabel,
-      type: currentQuestion?.type,
-      targetSeconds: currentQuestion?.targetSeconds || 60,
-      generatorLabel: currentQuestion?.generatorLabel,
-      mcpRunId: currentQuestion?.mcpRunId,
-    };
-    setAnswers(nextAnswers);
-    return nextAnswers;
   };
 
-  const nextQuestion = () => {
-    const nextAnswers = saveCurrentAnswer();
-    if (!nextAnswers) return;
-
+  const nextQuestion = async () => {
+    const saved = await submitAnswer();
+    if (!saved) return;
     setQuestionIndex((current) => current + 1);
-    setCurrentAnswer(nextAnswers[questionIndex + 1]?.answer || "");
+    setCurrentAnswer("");
+    setQuestionMode("spoken");
+    setReasonOpen(false);
+    beginQuestionRecording();
   };
 
   const completeInterview = async () => {
-    const nextAnswers = saveCurrentAnswer();
-    if (!nextAnswers) return;
+    const saved = await submitAnswer();
+    if (!saved) return;
 
     setLoading(true);
     try {
-      const capture = await stopRecorder();
       streamRef.current?.getTracks().forEach((track) => track.stop());
       if (timerRef.current) window.clearInterval(timerRef.current);
       await waitForBackgroundUploads();
-      const recording = await uploadRecording(capture);
 
       const response = await fetch(`/api/spark/interviews/${token}/complete`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          answers: nextAnswers,
-          recording,
+          answers: saved,
+          recording: {
+            captured: saved.some((item) => item?.mode === "spoken"),
+            durationSeconds: recordingElapsed,
+            mimeType: getRecordingMimeType(),
+            uploadStrategy: "per_question_clips",
+          },
           browser: browserSignals(),
         }),
       });
@@ -744,28 +849,88 @@ export function SparkInterviewSession({
         </section>
 
         <section className="sn-card p-4">
-          <p className="text-sm font-extrabold uppercase tracking-wide text-[var(--sn-coral)]">
-            {questionIndex + 1} / {questions.length}
-          </p>
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-sm font-extrabold uppercase tracking-wide text-[var(--sn-coral)]">
+              {questionIndex + 1} / {questions.length}
+            </p>
+            {questionMode === "spoken" && (
+              <button
+                type="button"
+                onClick={() => setReasonOpen((value) => !value)}
+                className="inline-flex items-center gap-1 text-xs font-bold text-[var(--sn-blue-700)]"
+                title="Can't use video? Type this answer instead."
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Type instead
+              </button>
+            )}
+          </div>
           <h2 className="mt-2 text-lg font-extrabold leading-7 text-[var(--sn-ink)]">
             {currentQuestionText}
           </h2>
-          <p className="mt-2 text-xs font-bold text-[var(--sn-muted)]">
-            Answer out loud and look at the camera.
-          </p>
-          <textarea
-            value={currentAnswer}
-            onChange={(event) => setCurrentAnswer(event.target.value)}
-            onPaste={(event) => {
-              event.preventDefault();
-              toast.error(
-                "Pasting is disabled — please answer in your own words."
-              );
-            }}
-            onDrop={(event) => event.preventDefault()}
-            className="sn-input mt-4 min-h-36 w-full px-3 py-2 text-sm"
-            placeholder="Answer in your own words (typing is a fallback if audio fails)."
-          />
+
+          {reasonOpen && questionMode === "spoken" && (
+            <div className="mt-3 rounded-lg border border-[var(--sn-line)] bg-white p-3">
+              <p className="text-xs font-bold text-[var(--sn-ink)]">
+                Why do you need to type this answer?
+              </p>
+              <div className="mt-2 grid gap-2">
+                {(Object.keys(TYPED_REASON_LABELS) as TypedReason[]).map(
+                  (reason) => (
+                    <button
+                      key={reason}
+                      type="button"
+                      onClick={() => switchToTyped(reason)}
+                      className="rounded-md border border-[var(--sn-line)] px-3 py-2 text-left text-sm hover:bg-black/5"
+                    >
+                      {TYPED_REASON_LABELS[reason]}
+                    </button>
+                  )
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setReasonOpen(false)}
+                className="mt-2 text-xs text-[var(--sn-muted)]"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+
+          {questionMode === "spoken" ? (
+            <p className="mt-2 text-xs font-bold text-[var(--sn-muted)]">
+              Answer out loud and look at the camera.
+            </p>
+          ) : (
+            <>
+              <p className="mt-2 text-xs font-bold text-[var(--sn-coral-600)]">
+                Typed answer ({TYPED_REASON_LABELS[typedReason]}) — recording is
+                off for this question.{" "}
+                <button
+                  type="button"
+                  onClick={switchToSpoken}
+                  className="font-extrabold text-[var(--sn-blue-700)] underline"
+                >
+                  Use video instead
+                </button>
+              </p>
+              <textarea
+                value={currentAnswer}
+                autoFocus
+                onChange={(event) => setCurrentAnswer(event.target.value)}
+                onPaste={(event) => {
+                  event.preventDefault();
+                  toast.error(
+                    "Pasting is disabled — please answer in your own words."
+                  );
+                }}
+                onDrop={(event) => event.preventDefault()}
+                className="sn-input mt-3 min-h-36 w-full px-3 py-2 text-sm"
+                placeholder="Type your answer in your own words."
+              />
+            </>
+          )}
         </section>
       </div>
 
