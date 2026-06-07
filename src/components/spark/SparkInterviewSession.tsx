@@ -839,10 +839,6 @@ export function SparkInterviewSession({
             muted
             playsInline
           />
-          <div className="absolute bottom-3 left-3 z-10 flex items-center gap-2 rounded-full bg-black/55 px-3 py-1.5 text-xs font-bold text-white backdrop-blur">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
-            Recording
-          </div>
         </section>
 
         <section className="sn-card p-4">
