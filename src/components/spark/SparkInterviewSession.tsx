@@ -175,6 +175,10 @@ export function SparkInterviewSession({
   const startedAtRef = useRef<number | null>(null);
   const captureRef = useRef<RecordingCapture | null>(null);
   const timerRef = useRef<number | null>(null);
+  // Per-question upload+transcribe tasks run in the background so advancing is
+  // instant; answersRef is the authoritative answers list they fill in.
+  const answerTasksRef = useRef<Promise<void>[]>([]);
+  const answersRef = useRef<Answer[]>([]);
 
   const [phase, setPhase] = useState<InterviewPhase>(
     initialStatus === "completed" || initialStatus === "InterviewCompleted"
@@ -191,7 +195,7 @@ export function SparkInterviewSession({
     failedChunks: 0,
   });
   const [questionIndex, setQuestionIndex] = useState(0);
-  const [answers, setAnswers] = useState<Answer[]>([]);
+  const [, setAnswers] = useState<Answer[]>([]);
   const [currentAnswer, setCurrentAnswer] = useState("");
   const [recordingMeta, setRecordingMeta] = useState({
     captured: false,
@@ -438,7 +442,15 @@ export function SparkInterviewSession({
     }
 
     const stopped = new Promise<void>((resolve) => {
-      recorder.onstop = () => resolve();
+      let settled = false;
+      const done = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+      recorder.onstop = done;
+      // Safety: if onstop never fires (a known browser quirk) don't hang.
+      window.setTimeout(done, 4000);
     });
     recorder.stop();
     await stopped;
@@ -505,107 +517,134 @@ export function SparkInterviewSession({
     beginQuestionRecording();
   };
 
-  // Submit the current question. Spoken: stop the clip, upload it, transcribe
-  // (via the /answer endpoint). Typed: send the flagged exception. Returns the
-  // updated answers array (used directly to avoid stale state), or null.
-  const submitAnswer = async (): Promise<Answer[] | null> => {
-    setLoading(true);
-    try {
-      const meta = {
-        question: currentQuestionText,
-        questionId: currentQuestion?.id,
-        source: currentQuestion?.source,
-        sourceLabel: currentQuestion?.sourceLabel,
-        type: currentQuestion?.type,
-        targetSeconds: currentQuestion?.targetSeconds || 60,
-        generatorLabel: currentQuestion?.generatorLabel,
-        mcpRunId: currentQuestion?.mcpRunId,
-      };
+  // Capture the current answer quickly: stop the recorder (spoken) or read the
+  // text (typed). Does NOT upload or transcribe — that runs in the background
+  // (queueAnswer) so advancing to the next question is instant.
+  type CapturedAnswer = {
+    meta: Answer;
+    mode: "spoken" | "typed";
+    text?: string;
+    reason?: TypedReason;
+    capture?: RecordingCapture;
+  };
 
-      let answer: Answer;
-      if (questionMode === "typed") {
-        const text = currentAnswer.trim();
-        if (!text) {
-          toast.error("Type your answer, or switch back to video.");
-          return null;
-        }
-        const res = await fetch(`/api/spark/interviews/${token}/answer`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            questionIndex,
-            questionId: currentQuestion?.id,
-            question: currentQuestionText,
+  const captureAnswer = async (): Promise<CapturedAnswer | null> => {
+    const meta: Answer = {
+      question: currentQuestionText,
+      questionId: currentQuestion?.id,
+      source: currentQuestion?.source,
+      sourceLabel: currentQuestion?.sourceLabel,
+      type: currentQuestion?.type,
+      targetSeconds: currentQuestion?.targetSeconds || 60,
+      generatorLabel: currentQuestion?.generatorLabel,
+      mcpRunId: currentQuestion?.mcpRunId,
+      answer: "",
+    };
+    if (questionMode === "typed") {
+      const text = currentAnswer.trim();
+      if (!text) {
+        toast.error("Type your answer, or switch back to video.");
+        return null;
+      }
+      return { meta, mode: "typed", text, reason: typedReason };
+    }
+    const capture = await stopRecorder();
+    if (!capture.blob || !capture.blob.size) {
+      toast.error(
+        "No recording was captured — try again, or tap the pencil to type."
+      );
+      return null;
+    }
+    return { meta, mode: "spoken", capture };
+  };
+
+  // Record the answer locally, then upload + transcribe in the BACKGROUND. The
+  // transcript fills into answersRef[index] when it resolves; completion waits
+  // for all of these tasks before sending /complete.
+  const queueAnswer = (captured: CapturedAnswer, index: number) => {
+    const placeholder: Answer =
+      captured.mode === "typed"
+        ? {
+            ...captured.meta,
+            answer: captured.text || "",
             mode: "typed",
-            typedAnswer: text,
-            reason: typedReason,
-          }),
-        });
-        const result = await res.json();
-        if (!res.ok || !result.success) {
-          throw new Error(result.error || "Unable to save the answer.");
+            reason: captured.reason,
+          }
+        : { ...captured.meta, answer: "", mode: "spoken" };
+    answersRef.current[index] = placeholder;
+    setAnswers((current) => {
+      const next = [...current];
+      next[index] = placeholder;
+      return next;
+    });
+
+    const task = (async () => {
+      try {
+        if (captured.mode === "typed") {
+          await fetch(`/api/spark/interviews/${token}/answer`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              questionIndex: index,
+              questionId: captured.meta.questionId,
+              question: captured.meta.question,
+              mode: "typed",
+              typedAnswer: captured.text,
+              reason: captured.reason,
+            }),
+          });
+          return;
         }
-        answer = { ...meta, answer: text, mode: "typed", reason: typedReason };
-      } else {
-        const capture = await stopRecorder();
-        if (!capture.blob || !capture.blob.size) {
-          toast.error(
-            "No recording was captured — try again, or tap the pencil to type."
-          );
-          return null;
-        }
+        const blob = captured.capture?.blob;
+        if (!blob) return;
         const upload = await uploadRecordingBlob(
-          capture.blob,
-          capture.mimeType || "video/webm"
+          blob,
+          captured.capture?.mimeType || "video/webm"
         );
         const res = await fetch(`/api/spark/interviews/${token}/answer`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            questionIndex,
-            questionId: currentQuestion?.id,
-            question: currentQuestionText,
+            questionIndex: index,
+            questionId: captured.meta.questionId,
+            question: captured.meta.question,
             mode: "spoken",
             recording: {
               storage: { bucket: upload.bucket, path: upload.path },
-              durationSeconds: capture.durationSeconds,
+              durationSeconds: captured.capture?.durationSeconds,
               mimeType: upload.mimeType,
             },
           }),
         });
-        const result = await res.json();
-        if (!res.ok || !result.success) {
-          throw new Error(result.error || "Unable to save the answer.");
-        }
+        const result = await res.json().catch(() => null);
         const transcript =
-          typeof result.answer?.transcript === "string"
+          typeof result?.answer?.transcript === "string"
             ? result.answer.transcript
             : "";
-        answer = {
-          ...meta,
+        const finalAnswer: Answer = {
+          ...placeholder,
           answer: transcript,
-          mode: "spoken",
           clipPath: upload.path,
         };
+        answersRef.current[index] = finalAnswer;
+        setAnswers((current) => {
+          const next = [...current];
+          next[index] = finalAnswer;
+          return next;
+        });
+      } catch (error) {
+        console.error("Spark answer processing failed:", error);
       }
-
-      const nextAnswers = [...answers];
-      nextAnswers[questionIndex] = answer;
-      setAnswers(nextAnswers);
-      return nextAnswers;
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Unable to save the answer."
-      );
-      return null;
-    } finally {
-      setLoading(false);
-    }
+    })();
+    answerTasksRef.current.push(task);
   };
 
   const nextQuestion = async () => {
-    const saved = await submitAnswer();
-    if (!saved) return;
+    setLoading(true);
+    const captured = await captureAnswer();
+    setLoading(false);
+    if (!captured) return;
+    queueAnswer(captured, questionIndex);
     setQuestionIndex((current) => current + 1);
     setCurrentAnswer("");
     setQuestionMode("spoken");
@@ -614,15 +653,21 @@ export function SparkInterviewSession({
   };
 
   const completeInterview = async () => {
-    const saved = await submitAnswer();
-    if (!saved) return;
-
     setLoading(true);
+    const captured = await captureAnswer();
+    if (!captured) {
+      setLoading(false);
+      return;
+    }
+    queueAnswer(captured, questionIndex);
     try {
       streamRef.current?.getTracks().forEach((track) => track.stop());
       if (timerRef.current) window.clearInterval(timerRef.current);
+      // Wait for every per-question upload + transcription to finish.
+      await Promise.allSettled(answerTasksRef.current);
       await waitForBackgroundUploads();
 
+      const saved = answersRef.current.filter(Boolean);
       const response = await fetch(`/api/spark/interviews/${token}/complete`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
