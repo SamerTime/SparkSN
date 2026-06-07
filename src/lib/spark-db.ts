@@ -404,9 +404,13 @@ export async function createInterviewRecordingUpload(
   }
 
   const extension = recordingExtension(normalizedContentType);
+  // Uniqueness must not rely on the millisecond timestamp alone: per-question
+  // clips + background chunks can upload within the same ms (and the token is
+  // constant for the session), which collided as "resource already exists".
+  // A UUID guarantees a distinct path per upload.
   const path = [
     safeStorageSegment(applicationId),
-    `${Date.now()}-${safeStorageSegment(token)}.${extension}`,
+    `${Date.now()}-${crypto.randomUUID()}.${extension}`,
   ].join("/");
   const { data, error } = await getSparkSupabase()
     .storage
