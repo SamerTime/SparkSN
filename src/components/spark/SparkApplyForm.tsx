@@ -625,89 +625,6 @@ export function SparkApplyForm({
         </section>
 
         <section className="sn-card p-4">
-          <div className="flex items-start gap-3">
-            <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[var(--sn-blue)]" />
-            <div>
-              <h3 className="text-base font-extrabold text-[var(--sn-ink)]">
-                Screening readiness
-              </h3>
-              <p className="mt-1 text-xs leading-5 text-[var(--sn-muted)]">
-                {manualReviewSelected
-                  ? "Manual review keeps device permissions off for initial submission."
-                  : "These checks support the future short mobile interview and recruiter fraud review."}
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-4 grid gap-3">
-            <div className="flex items-center gap-3 rounded-lg border border-[var(--sn-line)] bg-white p-3">
-              <Camera className="h-5 w-5 text-[var(--sn-coral)]" />
-              <div className="min-w-0">
-                <p className="text-sm font-bold text-[var(--sn-ink)]">
-                  Camera
-                </p>
-                <p className="text-xs text-[var(--sn-muted)]">
-                  {manualReviewSelected
-                    ? "Not requested for manual review submission."
-                    : "Needed only after recruiter approval."}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 rounded-lg border border-[var(--sn-line)] bg-white p-3">
-              <Mic className="h-5 w-5 text-[var(--sn-blue)]" />
-              <div className="min-w-0">
-                <p className="text-sm font-bold text-[var(--sn-ink)]">
-                  Microphone
-                </p>
-                <p className="text-xs text-[var(--sn-muted)]">
-                  {manualReviewSelected
-                    ? "Not requested for manual review submission."
-                    : "Used for the short video answers."}
-                </p>
-              </div>
-            </div>
-            <div className={`rounded-lg border p-3 ${locationTone}`}>
-              <div className="flex items-start gap-3">
-                <LocateFixed className={`mt-0.5 h-5 w-5 shrink-0 ${locationIconTone}`} />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold text-[var(--sn-ink)]">
-                    Location signal
-                  </p>
-                  <p className="mt-1 text-xs leading-5 text-[var(--sn-muted)]">
-                    {locationStatus}
-                  </p>
-                  {permissionStatusText && (
-                    <p className="mt-1 text-[11px] font-bold leading-4 text-[var(--sn-muted)]">
-                      {permissionStatusText}
-                    </p>
-                  )}
-                </div>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                className="mt-3 h-10 w-full border-[var(--sn-line)]"
-                onClick={captureLocation}
-                disabled={
-                  capturingLocation ||
-                  !form.geolocationConsent ||
-                  manualReviewSelected
-                }
-              >
-                {capturingLocation ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : locationCaptureState === "captured" ? (
-                  <CheckCircle2 className="h-4 w-4" />
-                ) : (
-                  <LocateFixed className="h-4 w-4" />
-                )}
-                {locationButtonLabel}
-              </Button>
-            </div>
-          </div>
-        </section>
-
-        <section className="sn-card p-4">
           <h3 className="text-base font-extrabold text-[var(--sn-ink)]">
             Consent and acknowledgement
           </h3>
@@ -803,6 +720,89 @@ export function SparkApplyForm({
               </label>
             </div>
           )}
+        </section>
+
+        <section className="sn-card p-4">
+          <div className="flex items-start gap-3">
+            <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[var(--sn-blue)]" />
+            <div>
+              <h3 className="text-base font-extrabold text-[var(--sn-ink)]">
+                Screening readiness
+              </h3>
+              <p className="mt-1 text-xs leading-5 text-[var(--sn-muted)]">
+                {manualReviewSelected
+                  ? "Manual review keeps device permissions off for initial submission."
+                  : "These checks support the future short mobile interview and recruiter fraud review."}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3">
+            <div className="flex items-center gap-3 rounded-lg border border-[var(--sn-line)] bg-white p-3">
+              <Camera className="h-5 w-5 text-[var(--sn-coral)]" />
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-[var(--sn-ink)]">
+                  Camera
+                </p>
+                <p className="text-xs text-[var(--sn-muted)]">
+                  {manualReviewSelected
+                    ? "Not requested for manual review submission."
+                    : "Needed only after recruiter approval."}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 rounded-lg border border-[var(--sn-line)] bg-white p-3">
+              <Mic className="h-5 w-5 text-[var(--sn-blue)]" />
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-[var(--sn-ink)]">
+                  Microphone
+                </p>
+                <p className="text-xs text-[var(--sn-muted)]">
+                  {manualReviewSelected
+                    ? "Not requested for manual review submission."
+                    : "Used for the short video answers."}
+                </p>
+              </div>
+            </div>
+            <div className={`rounded-lg border p-3 ${locationTone}`}>
+              <div className="flex items-start gap-3">
+                <LocateFixed className={`mt-0.5 h-5 w-5 shrink-0 ${locationIconTone}`} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold text-[var(--sn-ink)]">
+                    Location signal
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-[var(--sn-muted)]">
+                    {locationStatus}
+                  </p>
+                  {permissionStatusText && (
+                    <p className="mt-1 text-[11px] font-bold leading-4 text-[var(--sn-muted)]">
+                      {permissionStatusText}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-3 h-10 w-full border-[var(--sn-line)]"
+                onClick={captureLocation}
+                disabled={
+                  capturingLocation ||
+                  !form.geolocationConsent ||
+                  manualReviewSelected
+                }
+              >
+                {capturingLocation ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : locationCaptureState === "captured" ? (
+                  <CheckCircle2 className="h-4 w-4" />
+                ) : (
+                  <LocateFixed className="h-4 w-4" />
+                )}
+                {locationButtonLabel}
+              </Button>
+            </div>
+          </div>
         </section>
       </div>
 
