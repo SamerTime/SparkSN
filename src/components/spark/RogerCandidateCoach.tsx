@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Sparkles } from "lucide-react";
 import type { JsonValue } from "@/lib/spark-db";
 
@@ -51,6 +51,18 @@ function parseAnalysis(value: unknown): Analysis | null {
       : null,
   };
 }
+
+// Statuses where the AI screen is finished, so Roger's deeper analysis can run.
+const SCREEN_DONE = new Set([
+  "Complete",
+  "InterviewCompleted",
+  "RecruiterReview",
+  "Reviewing",
+  "Shortlisted",
+  "Vetted",
+  "Offer",
+  "Declined",
+]);
 
 function deriveOutcome(status: string): string | null {
   const s = status.toLowerCase();
@@ -113,6 +125,18 @@ export function RogerCandidateCoach({
       setRunning(false);
     }
   }
+
+  // Lazy auto-analyze: when a recruiter opens a completed-but-unanalyzed
+  // candidate, run Roger once automatically (no "Run Roger analysis" click).
+  const autoRanRef = useRef(false);
+  useEffect(() => {
+    if (autoRanRef.current) return;
+    if (!analysis && !running && SCREEN_DONE.has(status)) {
+      autoRanRef.current = true;
+      runAnalysis();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function proposeLesson() {
     const text = lesson.trim();
