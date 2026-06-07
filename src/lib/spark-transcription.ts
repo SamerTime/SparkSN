@@ -36,6 +36,17 @@ export async function transcribeInterviewRecording(
   if (!path) {
     throw new Error("No recording is stored for this candidate yet.");
   }
+  return transcribeRecordingAtPath(path);
+}
+
+/**
+ * Transcribe a single stored recording clip (a per-question segment, or the
+ * whole-session recording) at the given storage path with Workers AI Whisper.
+ */
+export async function transcribeRecordingAtPath(path: string): Promise<string> {
+  if (!path) {
+    throw new Error("No recording path provided.");
+  }
 
   const { data, error } = await getSparkSupabase()
     .storage.from(SPARK_INTERVIEW_RECORDINGS_BUCKET)
@@ -61,7 +72,7 @@ export async function transcribeInterviewRecording(
   const text = str(result.text).trim();
   if (!text) {
     throw new Error(
-      "Transcription returned empty text — the recording may be video-only or an unsupported container (likely need audio-only capture)."
+      "Transcription returned empty text — the clip may be video-only or an unsupported container."
     );
   }
   return text;
