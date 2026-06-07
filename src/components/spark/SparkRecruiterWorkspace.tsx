@@ -34,6 +34,7 @@ import {
   SparkCandidateStepper,
   wasInvited,
 } from "@/components/spark/SparkCandidateStepper";
+import { SparkCandidateContact } from "@/components/spark/SparkCandidateContact";
 import type {
   SparkApplicationWithRelations,
   SparkPublishedJobListItem,
@@ -1676,12 +1677,10 @@ function CandidateDetailDrawer({
                   {application.posting.title}
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {application.candidateEmail && (
-                    <span className="sn-chip">
-                      <Mail className="h-3.5 w-3.5" />
-                      {application.candidateEmail}
-                    </span>
-                  )}
+                  <SparkCandidateContact
+                    applicationId={application.id}
+                    email={application.candidateEmail}
+                  />
                   {application.candidatePhone && (
                     <span className="sn-chip">
                       <Phone className="h-3.5 w-3.5" />
