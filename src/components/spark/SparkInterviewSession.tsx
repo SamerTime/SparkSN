@@ -119,8 +119,11 @@ function mediaConstraints(facingMode: CameraFacing): MediaStreamConstraints {
   return {
     video: {
       facingMode,
-      width: { ideal: 720 },
-      height: { ideal: 1280 },
+      // Request the camera's natural (landscape) sensor for a wider field of
+      // view; forcing portrait makes phones center-crop the sensor (= zoomed in
+      // too close). The portrait preview box still frames it via object-cover.
+      width: { ideal: 1280 },
+      height: { ideal: 720 },
       frameRate: { ideal: 15, max: 24 },
     },
     audio: {
