@@ -267,33 +267,46 @@
     outline: none;
   }
 
+  /* Mobile: no decorative phone frame — the candidate is already on a phone,
+     so the screen fills the viewport instead of nesting a fake bezel. */
   .spark-phone {
     position: relative;
-    width: min(100%, 402px);
-    min-height: 720px;
-    border-radius: 38px;
-    border: 10px solid #0e1726;
+    width: 100%;
     background: var(--sn-soft);
-    box-shadow: var(--sn-shadow-lg);
     overflow: hidden;
   }
 
-  .spark-phone::before {
-    content: "";
-    position: absolute;
-    top: 10px;
-    left: 50%;
-    z-index: 20;
-    width: 126px;
-    height: 36px;
-    border-radius: 999px;
-    background: #000000;
-    transform: translateX(-50%);
+  .spark-phone-screen {
+    min-height: calc(100dvh - 132px);
+    background: var(--sn-soft);
   }
 
-  .spark-phone-screen {
-    min-height: 720px;
-    background: var(--sn-soft);
+  /* Desktop (and up): render the phone mockup frame. */
+  @media (min-width: 768px) {
+    .spark-phone {
+      width: min(100%, 402px);
+      min-height: 720px;
+      border-radius: 38px;
+      border: 10px solid #0e1726;
+      box-shadow: var(--sn-shadow-lg);
+    }
+
+    .spark-phone::before {
+      content: "";
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      z-index: 20;
+      width: 126px;
+      height: 36px;
+      border-radius: 999px;
+      background: #000000;
+      transform: translateX(-50%);
+    }
+
+    .spark-phone-screen {
+      min-height: 720px;
+    }
   }
 
   .spark-mobile-header {
