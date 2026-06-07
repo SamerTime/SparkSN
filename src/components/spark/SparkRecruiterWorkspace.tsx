@@ -247,6 +247,17 @@ function interviewAnswers(value: unknown): InterviewAnswer[] {
     .filter((item) => item.question && item.answer);
 }
 
+// Started the screen but never submitted (abandoned / in-progress).
+function interviewProgress(application: SparkRecruiterApplicationView) {
+  const incomplete =
+    application.status === "InProcess" ||
+    application.status === "InterviewStarted";
+  const session = jsonObject(jsonObject(application.interviewMedia).session);
+  const total = Array.isArray(session.questions) ? session.questions.length : 0;
+  const answered = interviewAnswers(application.interviewTranscript).length;
+  return { incomplete, answered, total };
+}
+
 function locationSummary(value: unknown) {
   const signals = jsonObject(value);
   const browserLocation = jsonObject(signals.browserGeolocation);
@@ -1063,6 +1074,15 @@ export function SparkRecruiterWorkspace({
                             interviewMedia={application.interviewMedia}
                             interviewTranscript={application.interviewTranscript}
                           />
+                          {(() => {
+                            const progress = interviewProgress(application);
+                            return progress.incomplete ? (
+                              <p className="mt-2 text-xs font-extrabold text-[var(--sn-coral-600)]">
+                                ⚠ Started, not finished · {progress.answered}/
+                                {progress.total}
+                              </p>
+                            ) : null;
+                          })()}
                         </div>
                       </button>
                       <WorkflowStatusMenu
@@ -1690,6 +1710,15 @@ function CandidateDetailDrawer({
                     interviewMedia={application.interviewMedia}
                     interviewTranscript={application.interviewTranscript}
                   />
+                  {(() => {
+                    const progress = interviewProgress(application);
+                    return progress.incomplete ? (
+                      <div className="mt-3 rounded-md border border-[var(--sn-coral-100)] bg-[var(--sn-coral-50)] px-3 py-2 text-xs font-extrabold text-[var(--sn-coral-600)]">
+                        ⚠ Started, not finished — {progress.answered} of{" "}
+                        {progress.total} answered
+                      </div>
+                    ) : null;
+                  })()}
                 </div>
               </div>
             </div>
