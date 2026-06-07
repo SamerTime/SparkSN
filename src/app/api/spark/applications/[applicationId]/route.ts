@@ -53,6 +53,21 @@ const ACTIONS: Record<string, ActionConfig> = {
     channel: "internal",
     messagePreview: "Recruiter corrected the candidate contact email.",
   },
+  move_in_person: {
+    status: "Shortlisted",
+    eventType: "moved_to_in_person",
+    label: "Moved to in-person interview",
+    channel: "internal",
+    messagePreview:
+      "Candidate advanced from the AI screen to a live in-person interview.",
+  },
+  hire: {
+    status: "Offer",
+    eventType: "candidate_hired",
+    label: "Candidate hired",
+    channel: "internal",
+    messagePreview: "Candidate selected for the role.",
+  },
   decline: {
     status: "Declined",
     eventType: "candidate_declined",
