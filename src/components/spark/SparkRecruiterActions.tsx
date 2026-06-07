@@ -2,7 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Loader2, MessageSquareText, Save, XCircle } from "lucide-react";
+import {
+  CheckCircle2,
+  Loader2,
+  MessageSquareText,
+  Save,
+  Trophy,
+  UserRoundCheck,
+  XCircle,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 
@@ -14,8 +22,10 @@ type SparkRecruiterActionsProps = {
 const ACTION_LABELS: Record<string, string> = {
   save_notes: "Save notes",
   approve: "Approve",
-  invite_interview: "Invite interview",
-  decline: "Decline",
+  invite_interview: "Invite to AI Screen",
+  move_in_person: "Move to In-Person",
+  hire: "Hire",
+  decline: "Reject",
 };
 
 export function SparkRecruiterActions({
@@ -60,6 +70,8 @@ export function SparkRecruiterActions({
     if (loadingAction === action) return <Loader2 className="h-4 w-4 animate-spin" />;
     if (action === "approve") return <CheckCircle2 className="h-4 w-4" />;
     if (action === "invite_interview") return <MessageSquareText className="h-4 w-4" />;
+    if (action === "move_in_person") return <UserRoundCheck className="h-4 w-4" />;
+    if (action === "hire") return <Trophy className="h-4 w-4" />;
     if (action === "decline") return <XCircle className="h-4 w-4" />;
     return <Save className="h-4 w-4" />;
   };
@@ -102,7 +114,28 @@ export function SparkRecruiterActions({
           onClick={() => runAction("invite_interview")}
         >
           {iconFor("invite_interview")}
-          Invite interview
+          Invite to AI Screen
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="border-[var(--sn-line)] bg-white"
+          disabled={Boolean(loadingAction)}
+          onClick={() => runAction("move_in_person")}
+        >
+          {iconFor("move_in_person")}
+          Move to In-Person
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          className="bg-[var(--sn-success)] text-white hover:bg-[#1f9651]"
+          disabled={Boolean(loadingAction)}
+          onClick={() => runAction("hire")}
+        >
+          {iconFor("hire")}
+          Hire
         </Button>
         <Button
           type="button"
@@ -113,7 +146,7 @@ export function SparkRecruiterActions({
           onClick={() => runAction("decline")}
         >
           {iconFor("decline")}
-          Decline
+          Reject
         </Button>
       </div>
     </div>

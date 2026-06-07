@@ -111,7 +111,7 @@ const WORKFLOW_STATUS_OPTIONS: WorkflowStatusOption[] = [
     tone: "primary",
   },
   {
-    label: "Complete",
+    label: "Screening Complete",
     status: "Complete",
     tone: "success",
   },
@@ -121,17 +121,17 @@ const WORKFLOW_STATUS_OPTIONS: WorkflowStatusOption[] = [
     tone: "warning",
   },
   {
-    label: "Shortlist",
+    label: "Interview In-Person",
     status: "Shortlisted",
     tone: "success",
   },
   {
-    label: "Reject",
+    label: "Rejected",
     status: "Declined",
     tone: "danger",
   },
   {
-    label: "Offer",
+    label: "Hired",
     status: "Offer",
     tone: "success",
   },
@@ -343,17 +343,17 @@ function formatStatus(status: string) {
   const labels: Record<string, string> = {
     ProfileStarted: "Profile Started",
     RecruiterApproved: "Approved",
-    InterviewInvited: "Interview Invited",
+    InterviewInvited: "AI Screen Invited",
     InProcess: "In Process",
     InterviewStarted: "In Process",
-    Complete: "Complete",
-    InterviewCompleted: "Complete",
+    Complete: "Screening Complete",
+    InterviewCompleted: "Screening Complete",
     RecruiterReview: "Reviewing",
     Reviewing: "Reviewing",
-    Vetted: "Shortlist",
-    Shortlisted: "Shortlist",
-    Declined: "Reject",
-    Offer: "Offer",
+    Vetted: "Interview In-Person",
+    Shortlisted: "Interview In-Person",
+    Declined: "Rejected",
+    Offer: "Hired",
   };
 
   if (labels[status]) return labels[status];
@@ -1661,17 +1661,11 @@ function CandidateDetailDrawer({
                   <Badge className={`border ${statusClass(application.status)}`}>
                     {formatStatus(application.status)}
                   </Badge>
-                  <span
-                    className={`sn-chip py-0.5 text-xs ${
-                      wasInvited(application.communicationState)
-                        ? "sn-chip-coral"
-                        : ""
-                    }`}
-                  >
-                    {wasInvited(application.communicationState)
-                      ? "Invited"
-                      : "Applied"}
-                  </span>
+                  {wasInvited(application.communicationState) && (
+                    <span className="sn-chip sn-chip-coral py-0.5 text-xs">
+                      Invited
+                    </span>
+                  )}
                 </div>
                 <p className="mt-1 text-sm text-[var(--sn-muted)]">
                   {application.posting.title}
