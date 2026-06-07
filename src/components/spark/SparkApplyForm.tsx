@@ -58,6 +58,12 @@ type ScreeningPathway = "standard_ai" | "manual_review";
 
 const SPARK_CONSENT_VERSION = "2026-06-06-v2";
 
+// The manual-review pathway is intake-wired but has no recruiter workflow yet,
+// so the option is hidden behind a flag. Turn it on by setting
+// NEXT_PUBLIC_SPARK_MANUAL_REVIEW="true". Plan: docs/briefs/manual-review-pathway.md
+const MANUAL_REVIEW_ENABLED =
+  process.env.NEXT_PUBLIC_SPARK_MANUAL_REVIEW === "true";
+
 export function SparkApplyForm({
   postingSlug,
   postingTitle,
@@ -470,34 +476,36 @@ export function SparkApplyForm({
               </span>
             </label>
 
-            <label
-              className={`block rounded-lg border p-3 ${
-                manualReviewSelected
-                  ? "border-[var(--sn-coral-100)] bg-[var(--sn-coral-50)]"
-                  : "border-[var(--sn-line)] bg-white"
-              }`}
-            >
-              <span className="flex items-start gap-3">
-                <input
-                  type="radio"
-                  name="screeningPathway"
-                  value="manual_review"
-                  checked={manualReviewSelected}
-                  onChange={() => updateScreeningPathway("manual_review")}
-                  className="mt-1 h-4 w-4 shrink-0 accent-[var(--sn-coral)]"
-                />
-                <span>
-                  <span className="block text-sm font-extrabold text-[var(--sn-ink)]">
-                    Manual recruiter review
-                  </span>
-                  <span className="mt-1 block text-xs leading-5 text-[var(--sn-muted)]">
-                    Request a human-led review pathway without standard AI
-                    screening acknowledgements or initial camera, microphone, or
-                    browser location capture.
+            {MANUAL_REVIEW_ENABLED && (
+              <label
+                className={`block rounded-lg border p-3 ${
+                  manualReviewSelected
+                    ? "border-[var(--sn-coral-100)] bg-[var(--sn-coral-50)]"
+                    : "border-[var(--sn-line)] bg-white"
+                }`}
+              >
+                <span className="flex items-start gap-3">
+                  <input
+                    type="radio"
+                    name="screeningPathway"
+                    value="manual_review"
+                    checked={manualReviewSelected}
+                    onChange={() => updateScreeningPathway("manual_review")}
+                    className="mt-1 h-4 w-4 shrink-0 accent-[var(--sn-coral)]"
+                  />
+                  <span>
+                    <span className="block text-sm font-extrabold text-[var(--sn-ink)]">
+                      Manual recruiter review
+                    </span>
+                    <span className="mt-1 block text-xs leading-5 text-[var(--sn-muted)]">
+                      Request a human-led review pathway without standard AI
+                      screening acknowledgements or initial camera, microphone,
+                      or browser location capture.
+                    </span>
                   </span>
                 </span>
-              </span>
-            </label>
+              </label>
+            )}
           </div>
         </section>
 
