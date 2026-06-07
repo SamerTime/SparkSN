@@ -56,13 +56,62 @@ box is demoted to an **accessibility fallback** only.
   when someone actually reviews. (Alternative: sync on completion — slower submit,
   runs even if never reviewed.)
 
+## VALIDATED (2026-06-07)
+Increment 1 deployed (PR #22) and tested on a real candidate recording:
+**`@cf/openai/whisper` transcribes our webm VIDEO directly** — no audio-only
+rebuild needed. (`/api/spark/applications/[id]/transcribe` returned clean text;
+stored on `interviewMedia.session.recording.audioTranscript`; typed answers
+untouched.) Bonus: a test transcript literally contained *"I can't move forward
+without typing"* — real evidence the typed requirement is friction to drop.
+
+## DECISION — per-question segments (Increment 2a)
+Record **per-question video clips** (start on question show, finalize + **upload
+on "Next"**), not one continuous recording. Rationale: smaller files, **incremental
+upload while the candidate moves on** (the end-of-session bulk upload is the
+fragile part on phones), resilience (a failed clip ≠ lost session), and clean 1:1
+question→transcript mapping. Each clip is transcribed individually (Whisper on
+webm — proven).
+
+## Per-answer data model
+```
+mode:        "spoken" | "typed"          // default spoken
+reason:      "accessibility" | "technical" | "cant_speak" | "other" (+ note)  // typed only
+language:    e.g. "es" (Whisper-detected) // spoken only
+transcript:  original-language text        // spoken
+translation: English text                  // spoken (recruiter readability)
+typedAnswer: text                          // typed
+clipPath:    storage path of the per-question clip  // spoken
+```
+- **Typed = flagged exception:** per-question **pencil** toggle → reason
+  dropdown (accessibility / technical / can't speak aloud / other) → box activates
+  (paste disabled), recording skipped for that question, answer tagged `typed`.
+- **Surface to Roger** (mode + reason in the prompt) **and the recruiter**
+  ("Typed" badge + "N of 10 typed" count). Default video + visible typed flag
+  preserves the anti-cheat intent.
+- **Multilingual:** Whisper supports ~99 languages — candidates may **speak their
+  own language**; store original + English translation + detected language, show
+  the recruiter English with a "spoken in X" tag. (Reduces the need to type for
+  language reasons.)
+
+## Future releases
+- **Candidate transparency email:** after the screen, email the candidate their
+  **questions + their text** (transcript) for transparency.
+- **Recording retention/deletion — COUNSEL DECISION (do not auto-delete):**
+  employment law (EEOC ~1yr hiring-record retention, 2yr for federal contractors,
+  longer if a charge is filed) likely **requires retaining** the recording; deleting
+  after litigation is anticipated risks **spoliation**. Defensible pattern: retain
+  per a **documented schedule, then auto-delete** — and the candidate email says
+  "kept securely for [X] then deleted," NOT "deleted now." Settle the policy with
+  legal before promising deletion.
+
 ## Open questions
 - Whisper accuracy on phone-mic audio in noisy environments — may need a paid
-  provider for production quality.
-- Per-question segments vs one-recording+timestamps (A vs B) — confirm with the
-  recording owner.
-- Retention: how long are raw recordings kept vs transcripts (compliance — ties to
-  the Notice at Collection).
+  provider (Deepgram/AssemblyAI) for production quality.
+- Translation: Whisper translate-task vs a separate model — confirm Cloudflare
+  params (language detection output + translate) during 2b.
+- 2a recorder rework changes the production candidate flow and **can't be tested
+  locally (no camera) or by the agent** — must be **real-phone tested on a branch
+  before merge**.
 
 ## References
 - `src/components/spark/SparkInterviewSession.tsx` — recording + per-question UI
