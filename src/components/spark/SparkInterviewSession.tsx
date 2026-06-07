@@ -185,7 +185,7 @@ export function SparkInterviewSession({
   const [previewReady, setPreviewReady] = useState(false);
   const [cameraFacing, setCameraFacing] = useState<CameraFacing>("user");
   const [recordingElapsed, setRecordingElapsed] = useState(0);
-  const [backgroundUpload, setBackgroundUpload] = useState({
+  const [, setBackgroundUpload] = useState({
     uploadedChunks: 0,
     pendingChunks: 0,
     failedChunks: 0,
@@ -352,8 +352,11 @@ export function SparkInterviewSession({
     });
     const recorder = new MediaRecorder(stream, {
       ...(mimeType ? { mimeType } : {}),
-      videoBitsPerSecond: 550_000,
-      audioBitsPerSecond: 64_000,
+      // Low video bitrate keeps per-question clips small enough for Whisper's
+      // request limit (the 3006 "too large" cause); high audio bitrate keeps
+      // transcription accurate.
+      videoBitsPerSecond: 250_000,
+      audioBitsPerSecond: 128_000,
     });
     chunksRef.current = [];
     recorder.ondataavailable = (event) => {
@@ -836,18 +839,9 @@ export function SparkInterviewSession({
             muted
             playsInline
           />
-          <div className="absolute bottom-3 left-3 right-3 z-10 rounded-lg bg-black/55 px-3 py-2 text-[11px] font-bold text-white backdrop-blur">
-            {backgroundUpload.pendingChunks > 0
-              ? `Saving backup clip${backgroundUpload.pendingChunks > 1 ? "s" : ""}`
-              : backgroundUpload.uploadedChunks > 0
-                ? `${backgroundUpload.uploadedChunks} backup clip${
-                    backgroundUpload.uploadedChunks > 1 ? "s" : ""
-                  } saved`
-                : "Recording locally"}
-            {backgroundUpload.failedChunks > 0 &&
-              `, ${backgroundUpload.failedChunks} backup clip${
-                backgroundUpload.failedChunks > 1 ? "s" : ""
-              } failed`}
+          <div className="absolute bottom-3 left-3 z-10 flex items-center gap-2 rounded-full bg-black/55 px-3 py-1.5 text-xs font-bold text-white backdrop-blur">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
+            Recording
           </div>
         </section>
 
