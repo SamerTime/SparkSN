@@ -64,7 +64,20 @@ export async function POST(
           { status: 400 }
         );
       }
-      transcript = await transcribeRecordingAtPath(clipPath);
+      // Resilient: a transcription failure (e.g. the clip exceeds Whisper's
+      // request limit) must NOT block the candidate. Store the clip + advance;
+      // the transcript can be regenerated server-side later from clipPath.
+      try {
+        transcript = await transcribeRecordingAtPath(clipPath);
+      } catch (transcriptionError) {
+        transcript = "";
+        console.error(
+          "Spark per-question transcription failed:",
+          transcriptionError instanceof Error
+            ? transcriptionError.message
+            : transcriptionError
+        );
+      }
     }
 
     const now = new Date().toISOString();
