@@ -744,17 +744,27 @@ export function SparkInterviewSession({
         </section>
 
         <section className="sn-card p-4">
-          <p className="text-xs font-extrabold uppercase text-[var(--sn-blue-700)]">
-            You have 1 minute to answer. Please look at the camera.
+          <p className="text-sm font-extrabold uppercase tracking-wide text-[var(--sn-coral)]">
+            {questionIndex + 1} / {questions.length}
           </p>
           <h2 className="mt-2 text-lg font-extrabold leading-7 text-[var(--sn-ink)]">
-            The question is: {currentQuestionText}
+            {currentQuestionText}
           </h2>
+          <p className="mt-2 text-xs font-bold text-[var(--sn-muted)]">
+            Answer out loud and look at the camera.
+          </p>
           <textarea
             value={currentAnswer}
             onChange={(event) => setCurrentAnswer(event.target.value)}
+            onPaste={(event) => {
+              event.preventDefault();
+              toast.error(
+                "Pasting is disabled — please answer in your own words."
+              );
+            }}
+            onDrop={(event) => event.preventDefault()}
             className="sn-input mt-4 min-h-36 w-full px-3 py-2 text-sm"
-            placeholder="Answer in your own words. Your typed answer is saved with the recorded screening."
+            placeholder="Answer in your own words (typing is a fallback if audio fails)."
           />
         </section>
       </div>
