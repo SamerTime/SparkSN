@@ -304,6 +304,14 @@ export function SparkApplyForm({
         throw new Error(result.error || "Unable to submit application.");
       }
 
+      // Auto-accepted (allowlisted domain): skip the confirmation screen and go
+      // straight into the AI screening.
+      if (typeof result.interviewUrl === "string" && result.interviewUrl) {
+        toast.success("You're in — starting your AI screening.");
+        window.location.assign(result.interviewUrl);
+        return;
+      }
+
       setSubmission({
         applicationId: result.applicationId,
         status: result.status,

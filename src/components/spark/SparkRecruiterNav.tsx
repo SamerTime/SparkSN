@@ -9,9 +9,11 @@ import {
   ListChecks,
   Loader2,
   LogOut,
+  ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { SparkLogo } from "@/components/spark/SparkBrand";
+import { SparkAdminDialog } from "@/components/spark/SparkAdminDialog";
 
 const NAV = [
   { href: "/spark/recruiter", label: "Jobs", icon: Briefcase, exact: true },
@@ -28,6 +30,7 @@ export function SparkRecruiterNav({ email }: { email: string | null }) {
   const pathname = usePathname();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const signOut = async () => {
@@ -115,6 +118,17 @@ export function SparkRecruiterNav({ email }: { email: string | null }) {
                   <div className="my-1 h-px bg-[var(--sn-line)]" />
                   <button
                     type="button"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setAdminOpen(true);
+                    }}
+                    className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm text-[var(--sn-ink)] hover:bg-black/5"
+                  >
+                    <ShieldCheck className="h-4 w-4" />
+                    Admin
+                  </button>
+                  <button
+                    type="button"
                     onClick={signOut}
                     disabled={loading}
                     className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm text-[var(--sn-ink)] hover:bg-black/5 disabled:opacity-50"
@@ -132,6 +146,7 @@ export function SparkRecruiterNav({ email }: { email: string | null }) {
           </div>
         </div>
       </div>
+      <SparkAdminDialog open={adminOpen} onClose={() => setAdminOpen(false)} />
     </header>
   );
 }
