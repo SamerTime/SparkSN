@@ -65,29 +65,32 @@ export async function POST(
       ? [...(transcript.answers as unknown[])]
       : [];
 
-    let transcribed = 0;
-    for (let i = 0; i < answers.length; i += 1) {
-      const answer = obj(answers[i]);
+    // Run pending Whisper calls in PARALLEL — for 10 clips this cuts a ~30-80s
+    // sequential pass down to roughly the slowest single clip (~5-10s). Each
+    // clip keeps its own try/catch so one failure (e.g. an oversized 5-minute
+    // clip) does not fail the batch.
+    const transcribeTasks = answers.map(async (raw, i) => {
+      const answer = obj(raw);
       const clipPath = str(answer.clipPath);
       const existing = str(answer.transcript) || str(answer.answer);
       // Only spoken clips without a transcript yet (idempotent).
-      if (!clipPath || existing) continue;
-
+      if (!clipPath || existing) return false;
       try {
         const text = (await transcribeRecordingAtPath(clipPath)).trim();
-        if (!text) continue;
+        if (!text) return false;
         // The recruiter view reads `.answer`; keep `.transcript` in sync.
         answers[i] = { ...answer, transcript: text, answer: text };
-        transcribed += 1;
+        return true;
       } catch (clipError) {
-        // One clip failing must not fail the whole request — long 5-minute
-        // clips may exceed Whisper limits, and that's acceptable.
         console.error(
           `Spark clip transcription failed for ${clipPath}:`,
           clipError
         );
+        return false;
       }
-    }
+    });
+    const results = await Promise.all(transcribeTasks);
+    const transcribed = results.filter(Boolean).length;
 
     if (transcribed > 0) {
       const nextTranscript = {
