@@ -3,13 +3,19 @@ import {
   createApplication,
   findApplicationByPostingAndEmail,
   findJobInvitationByPostingAndEmail,
+  getApprovedQuestionBankForPosting,
   getPublishedPostingForApplication,
+  interviewQuestionsFromBank,
   type JsonValue,
   type SparkApplicationStatus,
   updateApplication,
   updateJobInvitation,
   upsertCandidateProfileByEmail,
 } from "@/lib/spark-db";
+import {
+  emailMatchesAutoAcceptDomain,
+  getSparkSettings,
+} from "@/lib/spark-settings";
 
 function stringValue(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -98,6 +104,16 @@ function locationReviewReason(
   return "Candidate consented, but browser location was not captured.";
 }
 
+function interviewToken() {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function publicInterviewUrl(request: NextRequest, token: string) {
+  return `${new URL(request.url).origin}/interview/${token}`;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -169,6 +185,40 @@ export async function POST(request: NextRequest) {
         { success: false, error: "This job is not available for applications." },
         { status: 404 }
       );
+    }
+
+    // Auto-accept bypass: a standard-pathway applicant whose email domain is on
+    // the allowlist (Admin > Options) skips recruiter review + the email invite
+    // and is sent straight into the AI screening. Stays null if disabled, the
+    // domain doesn't match, or the job has no approved question bank.
+    let autoAcceptSession: Record<string, unknown> | null = null;
+    let autoAcceptUrl: string | null = null;
+    if (standardAiRequested && !manualReviewRequested) {
+      const settings = await getSparkSettings();
+      if (
+        settings.autoAcceptEnabled &&
+        emailMatchesAutoAcceptDomain(email, settings.autoAcceptDomains)
+      ) {
+        const approvedBank = await getApprovedQuestionBankForPosting(posting.id);
+        const snapshotQuestions = interviewQuestionsFromBank(approvedBank);
+        if (snapshotQuestions.length > 0) {
+          const token = interviewToken();
+          autoAcceptUrl = publicInterviewUrl(request, token);
+          autoAcceptSession = {
+            token,
+            status: "invited",
+            inviteUrl: autoAcceptUrl,
+            invitedAt: now,
+            expiresAt: new Date(
+              Date.now() + 7 * 24 * 60 * 60 * 1000
+            ).toISOString(),
+            questionBankId: approvedBank?.id ?? null,
+            questionBankApprovedAt: approvedBank?.approvedAt ?? null,
+            questions: snapshotQuestions,
+            autoAccepted: true,
+          };
+        }
+      }
     }
 
     const location = jsonObject(body.location);
@@ -249,6 +299,9 @@ export async function POST(request: NextRequest) {
       Boolean(invitation),
       manualReviewRequested
     );
+    const finalStatus: SparkApplicationStatus = autoAcceptSession
+      ? "InterviewInvited"
+      : applicationStatus;
 
     const candidateName = `${firstName} ${lastName}`;
     const locationSignals: JsonValue = {
@@ -312,18 +365,43 @@ export async function POST(request: NextRequest) {
               },
             ]
           : []),
-        {
-          type: "recruiter_review_queued",
-          label: "Recruiter review queued",
-          at: now,
-          channel: "internal",
-          messagePreview:
-            manualReviewRequested
-              ? "Manual review requested. Do not route this candidate through standard AI-assisted screening without updated consent."
-              : "Review profile, confirm fit, then approve or invite to interview.",
-          screeningPathway: resolvedScreeningPathway,
-          consentVersion: SPARK_CONSENT_VERSION,
-        },
+        ...(autoAcceptSession
+          ? [
+              {
+                type: "auto_accepted",
+                label: "Auto-accepted",
+                at: now,
+                channel: "internal",
+                messagePreview:
+                  "Auto-accepted — email domain matched the allowlist; recruiter review and the email invite were skipped.",
+                screeningPathway: resolvedScreeningPathway,
+                consentVersion: SPARK_CONSENT_VERSION,
+              },
+              {
+                type: "interview_invite_sent",
+                label: "Sent to AI screening",
+                at: now,
+                channel: "candidate",
+                messagePreview:
+                  "Candidate was auto-accepted and taken straight into the AI screening.",
+                screeningPathway: resolvedScreeningPathway,
+                consentVersion: SPARK_CONSENT_VERSION,
+              },
+            ]
+          : [
+              {
+                type: "recruiter_review_queued",
+                label: "Recruiter review queued",
+                at: now,
+                channel: "internal",
+                messagePreview:
+                  manualReviewRequested
+                    ? "Manual review requested. Do not route this candidate through standard AI-assisted screening without updated consent."
+                    : "Review profile, confirm fit, then approve or invite to interview.",
+                screeningPathway: resolvedScreeningPathway,
+                consentVersion: SPARK_CONSENT_VERSION,
+              },
+            ]),
       ],
       preferredChannel
     );
@@ -334,10 +412,13 @@ export async function POST(request: NextRequest) {
           candidateEmail: email,
           candidateName,
           candidatePhone: phone,
-          status: applicationStatus,
+          status: finalStatus,
           communicationState: communicationState as JsonValue,
           deviceSignals,
           locationSignals,
+          ...(autoAcceptSession
+            ? { interviewMedia: { session: autoAcceptSession } as JsonValue }
+            : {}),
         })
       : await createApplication({
           postingId: posting.id,
@@ -345,10 +426,13 @@ export async function POST(request: NextRequest) {
           candidateEmail: email,
           candidateName,
           candidatePhone: phone,
-          status: applicationStatus,
+          status: finalStatus,
           communicationState: communicationState as JsonValue,
           deviceSignals,
           locationSignals,
+          ...(autoAcceptSession
+            ? { interviewMedia: { session: autoAcceptSession } as JsonValue }
+            : {}),
         });
 
     if (invitation) {
@@ -378,8 +462,11 @@ export async function POST(request: NextRequest) {
       success: true,
       applicationId: application.id,
       status: application.status,
-      nextStep:
-        manualReviewRequested
+      // When auto-accepted, the apply form redirects the candidate straight here.
+      interviewUrl: autoAcceptUrl,
+      nextStep: autoAcceptUrl
+        ? "You're all set — taking you straight into your AI screening."
+        : manualReviewRequested
           ? "Your profile is queued for manual recruiter review. A recruiter may contact you for next steps."
           : "Your profile is queued for recruiter review. If approved, Spark will send the short interview link.",
     });
