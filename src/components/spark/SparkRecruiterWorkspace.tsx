@@ -236,24 +236,44 @@ function interviewAnswers(value: unknown): InterviewAnswer[] {
 
   return transcript.answers
     .map((item) => jsonObject(item))
-    .map((item) => ({
-      question: typeof item.question === "string" ? item.question.trim() : "",
-      answer: typeof item.answer === "string" ? item.answer.trim() : "",
-      questionId: stringValue(item.questionId),
-      source: stringValue(item.source),
-      sourceLabel:
-        stringValue(item.sourceLabel) ||
-        stringValue(item.source_label) ||
-        sourceCategory(stringValue(item.source)),
-      type: stringValue(item.type),
-      targetSeconds:
-        typeof item.targetSeconds === "number" ? item.targetSeconds : null,
-      generatorLabel:
-        stringValue(item.generatorLabel) || stringValue(item.generator_label),
-      mcpRunId: stringValue(item.mcpRunId) || stringValue(item.mcp_run_id) || null,
-      mode: stringValue(item.mode),
-      reason: stringValue(item.reason),
-    }))
+    .map((item) => {
+      const mode = stringValue(item.mode);
+      const rawAnswer =
+        typeof item.answer === "string" ? item.answer.trim() : "";
+      const typedAnswer =
+        typeof item.typedAnswer === "string" ? item.typedAnswer.trim() : "";
+      const clipPath =
+        typeof item.clipPath === "string" ? item.clipPath.trim() : "";
+      // Show typed text (it lives in typedAnswer, not `answer`). For spoken
+      // answers without a transcript yet, surface a "Transcription pending"
+      // placeholder so the entry isn't silently hidden until post-hoc Whisper
+      // runs — recruiters still see that the candidate answered Q-N.
+      const answer =
+        rawAnswer ||
+        typedAnswer ||
+        (mode === "spoken" && clipPath
+          ? "(Transcription pending — recording on file.)"
+          : "");
+      return {
+        question: typeof item.question === "string" ? item.question.trim() : "",
+        answer,
+        questionId: stringValue(item.questionId),
+        source: stringValue(item.source),
+        sourceLabel:
+          stringValue(item.sourceLabel) ||
+          stringValue(item.source_label) ||
+          sourceCategory(stringValue(item.source)),
+        type: stringValue(item.type),
+        targetSeconds:
+          typeof item.targetSeconds === "number" ? item.targetSeconds : null,
+        generatorLabel:
+          stringValue(item.generatorLabel) || stringValue(item.generator_label),
+        mcpRunId:
+          stringValue(item.mcpRunId) || stringValue(item.mcp_run_id) || null,
+        mode,
+        reason: stringValue(item.reason),
+      };
+    })
     .filter((item) => item.question && item.answer);
 }
 
