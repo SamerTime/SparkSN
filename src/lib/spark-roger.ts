@@ -745,6 +745,18 @@ function requireDashboard47Env(name: string): string {
 
 function analysisIsComplete(value: unknown): value is RogerAnalysis {
   const a = jsonObject(value);
+  // Accept the NEW AI Screening Results schema (Codex's analyze_responses
+  // now emits): summary + fitSignal (chips optional). Either is a valid
+  // complete analysis — the OLD focus-area gate rejected every new response.
+  const fit = cleanText(a.fitSignal);
+  if (
+    cleanText(a.summary).length > 0 &&
+    ["Strong", "Mixed", "Weak"].includes(fit)
+  ) {
+    return true;
+  }
+  // Backwards-compat: the older schema (candidate_summary + 3 focus areas +
+  // next step) is also a valid complete analysis.
   return (
     cleanText(a.candidate_summary).length > 0 &&
     Array.isArray(a.in_person_focus_areas) &&
