@@ -3,6 +3,28 @@
 import { useEffect, useRef, useState } from "react";
 import { Sparkles } from "lucide-react";
 import type { JsonValue } from "@/lib/spark-db";
+import {
+  ScreeningChips,
+  type ChipTone,
+  type ScreeningChip,
+} from "@/components/spark/SparkScreeningChips";
+
+// Coarse fit band (Strong/Mixed/Weak) — advisory, never a numeric rank.
+function FitBadge({ signal }: { signal: string }) {
+  const tone =
+    signal === "Strong"
+      ? "border-[#bde8ce] bg-[var(--sn-success-50)] text-[var(--sn-success)]"
+      : signal === "Weak"
+        ? "border-[#f3c0c0] bg-[#fbe9e9] text-[var(--sn-danger)]"
+        : "border-[var(--sn-coral-100)] bg-[var(--sn-coral-50)] text-[var(--sn-coral-600)]";
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-3 py-0.5 text-xs font-extrabold ${tone}`}
+    >
+      Fit: {signal}
+    </span>
+  );
+}
 
 function obj(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -18,22 +40,44 @@ function arr(value: unknown): unknown[] {
 
 type FocusArea = { area: string; why: string; suggested_probe: string };
 type Analysis = {
+  summary: string;
+  fitSignal: string;
+  chips: ScreeningChip[];
   candidate_summary: string;
   in_person_focus_areas: FocusArea[];
   recommended_next_step: string;
   suggested_lesson: { lesson: string; applies_to: string } | null;
 };
 
+function parseChip(value: unknown): ScreeningChip {
+  const c = obj(value);
+  const tone = str(c.tone);
+  return {
+    label: str(c.label),
+    tone: (["green", "blue", "amber", "red"].includes(tone)
+      ? tone
+      : "blue") as ChipTone,
+    evidence: str(c.evidence) || undefined,
+  };
+}
+
 function parseAnalysis(value: unknown): Analysis | null {
   const o = obj(value);
   const isRoger =
     str(o.generatedBy) === "roger_mcp_v1" ||
     typeof o.candidate_summary === "string" ||
+    typeof o.summary === "string" ||
+    Array.isArray(o.chips) ||
     Array.isArray(o.in_person_focus_areas);
   if (!isRoger) return null;
   const sl = obj(o.suggested_lesson);
   const lesson = str(sl.lesson);
   return {
+    summary: str(o.summary),
+    fitSignal: str(o.fitSignal),
+    chips: arr(o.chips)
+      .map(parseChip)
+      .filter((c) => c.label),
     candidate_summary: str(o.candidate_summary),
     in_person_focus_areas: arr(o.in_person_focus_areas)
       .map((x) => {
@@ -197,6 +241,24 @@ export function RogerCandidateCoach({
 
       {analysis ? (
         <div className="mt-3 space-y-3">
+          {(analysis.fitSignal ||
+            analysis.summary ||
+            analysis.chips.length > 0) && (
+            <div className="space-y-2 border-b border-[var(--sn-line)] pb-3">
+              {analysis.fitSignal && <FitBadge signal={analysis.fitSignal} />}
+              {analysis.summary && (
+                <p className="text-sm font-semibold leading-6 text-[var(--sn-ink)]">
+                  {analysis.summary}
+                </p>
+              )}
+              {analysis.chips.length > 0 && (
+                <ScreeningChips chips={analysis.chips} />
+              )}
+              <p className="text-[11px] text-[var(--sn-muted)]">
+                Advisory · transcript-based · recruiter decides.
+              </p>
+            </div>
+          )}
           {analysis.candidate_summary && (
             <p className="text-sm leading-6 text-[var(--sn-muted)]">
               {analysis.candidate_summary}

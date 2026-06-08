@@ -443,7 +443,13 @@ export async function PATCH(
       label: config.label,
       at: now,
       channel: config.channel,
-      messagePreview: config.messagePreview,
+      // Show the actual note text in the log so the save is visibly confirmed.
+      messagePreview:
+        action === "save_notes" && recruiterNotes
+          ? `“${recruiterNotes.slice(0, 90)}${
+              recruiterNotes.length > 90 ? "…" : ""
+            }”`
+          : config.messagePreview,
       ...inviteEventDelivery(delivery),
     }, action === "invite_interview");
 
