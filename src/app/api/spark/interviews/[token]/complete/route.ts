@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  getApprovedQuestionBankForPosting,
   getApplicationByInterviewToken,
   SPARK_INTERVIEW_RECORDINGS_BUCKET,
   type JsonValue,
   updateApplication,
 } from "@/lib/spark-db";
-import { reviewScreeningWithRoger } from "@/lib/spark-roger";
 
 type InterviewAnswer = {
   question: string;
@@ -174,29 +172,17 @@ export async function POST(
             },
       },
     }) as JsonValue;
-    const questionBank = await getApprovedQuestionBankForPosting(
-      application.posting.id
-    );
-    const aiSummary = await reviewScreeningWithRoger({
-      applicationId: application.id,
-      posting: application.posting,
-      candidate: application.candidate,
-      answers,
-      questionBank,
-      recordingSeconds,
-      recordingCaptured: Boolean(recording.captured),
-      browser: browser as JsonValue,
-      deviceSignals: application.deviceSignals,
-      locationSignals: application.locationSignals,
-    });
-
+    // Do NOT block the candidate's completion on Roger analysis. That call can
+    // exceed the Cloudflare Worker time limit and return an HTML error to the
+    // candidate even though the interview saved. The recruiter view auto-runs
+    // the analysis on open (RogerCandidateCoach), so aiSummary is produced then.
     const updated = await updateApplication(
       application.id,
       {
         status: "InterviewCompleted",
         interviewMedia,
         interviewTranscript: transcript,
-        aiSummary,
+        aiSummary: null,
         communicationState: appendEvent(application.communicationState, {
           type: "interview_completed",
           label: "Interview completed",
