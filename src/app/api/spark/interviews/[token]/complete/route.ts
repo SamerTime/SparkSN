@@ -6,20 +6,6 @@ import {
   updateApplication,
 } from "@/lib/spark-db";
 
-type InterviewAnswer = {
-  question: string;
-  answer: string;
-  questionId?: string;
-  source?: string;
-  sourceLabel?: string;
-  type?: string;
-  targetSeconds?: number | null;
-  generatorLabel?: string;
-  mcpRunId?: string | null;
-  mode?: string;
-  reason?: string;
-};
-
 function stringValue(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -33,28 +19,6 @@ function jsonObject(value: unknown): Record<string, unknown> {
 function numberValue(value: unknown) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-function answersValue(value: unknown): InterviewAnswer[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((item) => jsonObject(item))
-    .map((item) => ({
-      question: stringValue(item.question),
-      answer: stringValue(item.answer),
-      questionId: stringValue(item.questionId) || undefined,
-      source: stringValue(item.source) || undefined,
-      sourceLabel: stringValue(item.sourceLabel) || undefined,
-      type: stringValue(item.type) || undefined,
-      targetSeconds: numberValue(item.targetSeconds),
-      generatorLabel: stringValue(item.generatorLabel) || undefined,
-      mcpRunId: stringValue(item.mcpRunId) || null,
-      // Preserve the answer modality so the recruiter view can flag typed
-      // (non-spoken) answers with their reason (Spark-owned Typed chip).
-      mode: stringValue(item.mode) || undefined,
-      reason: stringValue(item.reason) || undefined,
-    }))
-    .filter((item) => item.question && item.answer);
 }
 
 function chunkUploadsValue(value: unknown, applicationId: string) {
@@ -119,14 +83,6 @@ export async function POST(
       );
     }
 
-    const answers = answersValue(body.answers);
-    if (answers.length < 3) {
-      return NextResponse.json(
-        { success: false, error: "Please answer at least three questions." },
-        { status: 400 }
-      );
-    }
-
     const now = new Date().toISOString();
     const recording = jsonObject(body.recording);
     const recordingStorage = jsonObject(recording.storage);
@@ -139,12 +95,18 @@ export async function POST(
     const chunkUploadSummary = jsonObject(recording.chunkUploadSummary);
     const browser = jsonObject(body.browser);
     const recordingSeconds = numberValue(recording.durationSeconds);
+    // Decoupled completion: each answer was already saved per-question by
+    // /answer (the durable record). Completion does NOT re-bundle or overwrite
+    // them — it preserves interviewTranscript.answers and only records the
+    // recording metadata + flips status. This keeps /complete trivial and
+    // basically unable to fail, so a candidate never loses their interview.
+    const existingTranscript = jsonObject(application.interviewTranscript);
     const transcript: JsonValue = {
+      ...existingTranscript,
       source: "spark_interview_session",
       submittedAt: now,
-      answers: answers as unknown as JsonValue,
       browser: browser as JsonValue,
-    };
+    } as JsonValue;
     const interviewMedia = updateSession(application.interviewMedia, {
       status: "completed",
       completedAt: now,
