@@ -148,6 +148,16 @@ export function RogerCandidateCoach({
   async function runAnalysis() {
     setRunning(true);
     try {
+      // Always transcribe any pending spoken clips first — Re-run used to skip
+      // this and analyze with empty answers, returning a useless result.
+      try {
+        await fetch(
+          `/api/spark/applications/${applicationId}/transcribe-clips`,
+          { method: "POST" }
+        );
+      } catch {
+        // Resilient — proceed to analysis with whatever transcripts exist.
+      }
       const res = await fetch(`/api/spark/applications/${applicationId}/analyze`, {
         method: "POST",
       });
@@ -177,20 +187,9 @@ export function RogerCandidateCoach({
     if (autoRanRef.current) return;
     if (!analysis && !running && SCREEN_DONE.has(status)) {
       autoRanRef.current = true;
-      (async () => {
-        // Post-hoc transcription first: the candidate's flow only uploaded
-        // per-question clips, so transcribe them before Roger analyzes. Resilient
-        // — a transcription failure must never block the analysis below.
-        try {
-          await fetch(
-            `/api/spark/applications/${applicationId}/transcribe-clips`,
-            { method: "POST" }
-          );
-        } catch {
-          // Ignore — proceed to analysis with whatever transcripts exist.
-        }
-        await runAnalysis();
-      })();
+      // runAnalysis() now transcribes pending clips first, so a single call
+      // covers both the lazy auto-run and the explicit Re-run button.
+      void runAnalysis();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

@@ -23,9 +23,14 @@ function transcriptResponses(transcript: unknown) {
         entry && typeof entry === "object"
           ? (entry as Record<string, unknown>)
           : {};
+      // Typed answers store their text in `typedAnswer`, not `answer`. Spoken
+      // answers fill `answer` with the post-hoc Whisper transcript. Fall back so
+      // both kinds reach Roger.
+      const spoken = typeof obj.answer === "string" ? obj.answer : "";
+      const typed = typeof obj.typedAnswer === "string" ? obj.typedAnswer : "";
       return {
         question_text: typeof obj.question === "string" ? obj.question : "",
-        answer_text: typeof obj.answer === "string" ? obj.answer : "",
+        answer_text: spoken.trim() ? spoken : typed,
       };
     })
     .filter((r) => r.answer_text.trim().length > 0);
