@@ -486,32 +486,6 @@ function summaryPreview(value: unknown) {
   return text || "AI interview summary will appear after the video screen is complete.";
 }
 
-function summaryChips(value: unknown) {
-  const summary = jsonObject(value);
-  const roger = jsonObject(summary.roger);
-  const generatedBy = stringValue(summary.generatedBy);
-  const chips: Array<{ label: string; tone?: "blue" | "coral" }> = [];
-
-  if (generatedBy.includes("roger") || stringValue(roger.status) === "used") {
-    chips.push({ label: "Roger reviewed", tone: "blue" });
-  } else if (generatedBy || stringValue(roger.status)) {
-    chips.push({ label: "Fallback summary", tone: "coral" });
-  }
-
-  const mcpRunId = stringValue(summary.mcpRunId) || stringValue(roger.mcpRunId);
-  if (mcpRunId) chips.push({ label: `MCP ${mcpRunId.slice(0, 8)}` });
-
-  const modelName = stringValue(summary.modelName) || stringValue(roger.modelName);
-  if (modelName) chips.push({ label: modelName });
-
-  return chips;
-}
-
-function summaryItems(value: unknown, key: string) {
-  const summary = jsonObject(value);
-  return stringArray(summary[key]).slice(0, 4);
-}
-
 function candidateName(application: SparkRecruiterApplicationView) {
   return (
     application.candidateName ||
@@ -1697,21 +1671,6 @@ function DeleteSubmissionDialog({
   );
 }
 
-function SummaryList({ title, items }: { title: string; items: string[] }) {
-  return (
-    <div>
-      <p className="text-xs font-extrabold uppercase text-[var(--sn-muted)]">
-        {title}
-      </p>
-      <ul className="mt-2 space-y-1 text-xs leading-5 text-[var(--sn-muted)]">
-        {items.map((item) => (
-          <li key={item}>{item}</li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
 function CandidateDetailDrawer({
   application,
   onClose,
@@ -1725,10 +1684,6 @@ function CandidateDetailDrawer({
   const rogerAnswerChips = rogerAnswerChipsByIndex(application.aiSummary);
   const recordingView = application.recordingView;
   const profileLocation = candidateLocation(application);
-  const aiSummaryChips = summaryChips(application.aiSummary);
-  const recruiterFocus = summaryItems(application.aiSummary, "recruiterFocus");
-  const strengths = summaryItems(application.aiSummary, "strengths");
-  const concerns = summaryItems(application.aiSummary, "concerns");
 
   return (
     <div className="fixed inset-0 z-50">
@@ -1833,49 +1788,6 @@ function CandidateDetailDrawer({
         <div className="min-h-0 flex-1 overflow-y-auto bg-[var(--sn-soft)] p-5">
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
             <div className="min-w-0 space-y-4">
-              <section className="rounded-lg border border-[var(--sn-line)] bg-white p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-2 text-sm font-extrabold text-[var(--sn-ink)]">
-                    <Sparkles className="h-4 w-4 text-[var(--sn-coral)]" />
-                    AI summary
-                  </div>
-                  {aiSummaryChips.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {aiSummaryChips.map((chip) => (
-                        <span
-                          key={chip.label}
-                          className={`sn-chip py-1 text-xs ${
-                            chip.tone === "blue"
-                              ? "sn-chip-blue"
-                              : chip.tone === "coral"
-                                ? "sn-chip-coral"
-                                : ""
-                          }`}
-                        >
-                          {chip.label}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <p className="mt-3 text-sm leading-6 text-[var(--sn-muted)]">
-                  {summaryPreview(application.aiSummary)}
-                </p>
-                {[recruiterFocus, strengths, concerns].some((items) => items.length > 0) && (
-                  <div className="mt-4 grid gap-3 lg:grid-cols-3">
-                    {recruiterFocus.length > 0 && (
-                      <SummaryList title="Focus" items={recruiterFocus} />
-                    )}
-                    {strengths.length > 0 && (
-                      <SummaryList title="Strengths" items={strengths} />
-                    )}
-                    {concerns.length > 0 && (
-                      <SummaryList title="Review" items={concerns} />
-                    )}
-                  </div>
-                )}
-              </section>
-
               <RogerCandidateCoach
                 applicationId={application.id}
                 postingId={application.postingId}
