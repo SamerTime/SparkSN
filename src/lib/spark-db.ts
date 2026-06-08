@@ -839,9 +839,16 @@ async function listQuestionRepositoryRowsFromTables(): Promise<
 export async function listQuestionRepositoryRows(): Promise<
   SparkQuestionRepositoryRow[]
 > {
-  const fromTables = await listQuestionRepositoryRowsFromTables();
-  // Mirror tables not present yet (pre-migration) — derive from JSONB.
-  const rows = fromTables ?? (await listQuestionRepositoryRowsFromJsonb());
+  // The normalized spark_questions table only holds banks written since it was
+  // wired up, so it can be incomplete. The JSONB banks are the complete source
+  // (every bank, incl. retired). Merge both — JSONB as the base, normalized rows
+  // enriching any overlapping questionId — so no question is ever hidden.
+  const fromJsonb = await listQuestionRepositoryRowsFromJsonb();
+  const fromTables = (await listQuestionRepositoryRowsFromTables()) ?? [];
+  const byId = new Map<string, SparkQuestionRepositoryRow>();
+  for (const row of fromJsonb) byId.set(row.questionId, row);
+  for (const row of fromTables) byId.set(row.questionId, row);
+  const rows = [...byId.values()];
   const tallies = await loadFeedbackTalliesByQuestion();
   for (const row of rows) {
     const t = tallies.get(row.questionId);
