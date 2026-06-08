@@ -177,7 +177,20 @@ export function RogerCandidateCoach({
     if (autoRanRef.current) return;
     if (!analysis && !running && SCREEN_DONE.has(status)) {
       autoRanRef.current = true;
-      runAnalysis();
+      (async () => {
+        // Post-hoc transcription first: the candidate's flow only uploaded
+        // per-question clips, so transcribe them before Roger analyzes. Resilient
+        // — a transcription failure must never block the analysis below.
+        try {
+          await fetch(
+            `/api/spark/applications/${applicationId}/transcribe-clips`,
+            { method: "POST" }
+          );
+        } catch {
+          // Ignore — proceed to analysis with whatever transcripts exist.
+        }
+        await runAnalysis();
+      })();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

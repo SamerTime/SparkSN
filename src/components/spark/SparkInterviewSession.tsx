@@ -84,6 +84,10 @@ const RECORDING_MIME_TYPES = [
   "video/mp4",
 ];
 const RECORDING_CHUNK_MS = 6_000;
+// Each spoken answer can run up to 5 minutes; at the cap we auto-submit/advance
+// that question by reusing the normal submit path (capture + queue + advance,
+// or complete on the last question) so the candidate never loses the clip.
+const MAX_ANSWER_SECONDS = 300;
 
 function browserSignals() {
   return {
@@ -179,6 +183,9 @@ export function SparkInterviewSession({
   // instant; answersRef is the authoritative answers list they fill in.
   const answerTasksRef = useRef<Promise<void>[]>([]);
   const answersRef = useRef<Answer[]>([]);
+  // Guards the 5-minute auto-submit so it fires once per question and never
+  // races a manual Next/Submit tap.
+  const autoSubmittingRef = useRef(false);
 
   const [phase, setPhase] = useState<InterviewPhase>(
     initialStatus === "completed" || initialStatus === "InterviewCompleted"
@@ -301,6 +308,23 @@ export function SparkInterviewSession({
     };
   };
 
+  // Upload a clip, retrying ONCE after a short wait on a transient failure so a
+  // single hiccup doesn't silently drop a candidate's answer clip.
+  const uploadRecordingBlobWithRetry = async (blob: Blob, mimeType: string) => {
+    try {
+      return await uploadRecordingBlob(blob, mimeType);
+    } catch (error) {
+      await new Promise((resolve) => window.setTimeout(resolve, 1000));
+      try {
+        return await uploadRecordingBlob(blob, mimeType);
+      } catch {
+        throw error instanceof Error
+          ? error
+          : new Error("Unable to upload interview video.");
+      }
+    }
+  };
+
   const uploadChunkInBackground = (chunk: Blob) => {
     if (!chunk.size) return;
 
@@ -402,6 +426,7 @@ export function SparkInterviewSession({
     setLoading(true);
     try {
       const stream = streamRef.current || (await requestMediaStream(cameraFacing));
+      autoSubmittingRef.current = false;
       startRecording(stream);
       const startedAt = Date.now();
       startedAtRef.current = startedAt;
@@ -479,6 +504,7 @@ export function SparkInterviewSession({
   const beginQuestionRecording = () => {
     const stream = streamRef.current;
     if (!stream) return;
+    autoSubmittingRef.current = false;
     startRecording(stream);
     const startedAt = Date.now();
     startedAtRef.current = startedAt;
@@ -597,7 +623,7 @@ export function SparkInterviewSession({
         }
         const blob = captured.capture?.blob;
         if (!blob) return;
-        const upload = await uploadRecordingBlob(
+        const upload = await uploadRecordingBlobWithRetry(
           blob,
           captured.capture?.mimeType || "video/webm"
         );
@@ -700,6 +726,24 @@ export function SparkInterviewSession({
       setLoading(false);
     }
   };
+
+  // 5-minute per-question cap: when the live timer hits the cap during a spoken
+  // answer, auto-submit/advance through the SAME path a manual tap uses (Next on
+  // earlier questions, Submit/complete on the last). Guarded so it fires once.
+  useEffect(() => {
+    if (phase !== "active") return;
+    if (questionMode !== "spoken") return;
+    if (recordingElapsed < MAX_ANSWER_SECONDS) return;
+    if (autoSubmittingRef.current || loading) return;
+    autoSubmittingRef.current = true;
+    const isLast = questionIndex === questions.length - 1;
+    if (isLast) {
+      void completeInterview();
+    } else {
+      void nextQuestion();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recordingElapsed, phase, questionMode, questionIndex, loading]);
 
   if (phase === "completed") {
     return (
@@ -938,7 +982,8 @@ export function SparkInterviewSession({
 
           {questionMode === "spoken" ? (
             <p className="mt-2 text-xs font-bold text-[var(--sn-muted)]">
-              Answer out loud and look at the camera.
+              Answer out loud and look at the camera. You have up to 5 minutes
+              per question — we&apos;ll move you on automatically at 5:00.
             </p>
           ) : (
             <>

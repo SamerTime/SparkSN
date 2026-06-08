@@ -4,7 +4,6 @@ import {
   updateApplication,
   type JsonValue,
 } from "@/lib/spark-db";
-import { transcribeRecordingAtPath } from "@/lib/spark-transcription";
 
 function obj(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -51,7 +50,7 @@ export async function POST(
     const questionIndex = num(body.questionIndex);
     const mode = str(body.mode) === "typed" ? "typed" : "spoken";
 
-    let transcript = "";
+    const transcript = "";
     let clipPath = "";
     if (mode === "spoken") {
       clipPath = str(obj(obj(body.recording).storage).path);
@@ -64,20 +63,10 @@ export async function POST(
           { status: 400 }
         );
       }
-      // Resilient: a transcription failure (e.g. the clip exceeds Whisper's
-      // request limit) must NOT block the candidate. Store the clip + advance;
-      // the transcript can be regenerated server-side later from clipPath.
-      try {
-        transcript = await transcribeRecordingAtPath(clipPath);
-      } catch (transcriptionError) {
-        transcript = "";
-        console.error(
-          "Spark per-question transcription failed:",
-          transcriptionError instanceof Error
-            ? transcriptionError.message
-            : transcriptionError
-        );
-      }
+      // Decoupled capture: the uploaded clip IS the saved answer. We do NOT
+      // transcribe in the candidate's path — transcription runs post-hoc
+      // (recruiter side) from clipPath, so a slow or oversized 5-minute clip can
+      // never block or fail the candidate. transcript stays empty here.
     }
 
     const now = new Date().toISOString();
