@@ -69,8 +69,8 @@ export function SparkAdminDialog({
         className="absolute inset-0 bg-slate-950/40"
         onClick={onClose}
       />
-      <div className="relative z-10 w-full max-w-lg rounded-lg border border-[var(--sn-line)] bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-[var(--sn-line)] p-4">
+      <div className="relative z-10 flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-lg border border-[var(--sn-line)] bg-white shadow-2xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-[var(--sn-line)] p-4">
           <div className="flex items-center gap-2 font-extrabold text-[var(--sn-ink)]">
             <ShieldCheck className="h-5 w-5 text-[var(--sn-blue)]" />
             Admin
@@ -84,7 +84,7 @@ export function SparkAdminDialog({
           </button>
         </div>
 
-        <div className="p-5">
+        <div className="overflow-y-auto p-5">
           {loading ? (
             <div className="flex items-center gap-2 py-6 text-sm text-[var(--sn-muted)]">
               <Loader2 className="h-4 w-4 animate-spin" /> Loading…
