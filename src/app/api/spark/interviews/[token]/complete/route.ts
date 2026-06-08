@@ -144,7 +144,8 @@ export async function POST(
         status: "InterviewCompleted",
         interviewMedia,
         interviewTranscript: transcript,
-        aiSummary: null,
+        // Do NOT touch aiSummary here — the column is NOT NULL, and the analysis
+        // is produced post-hoc by the recruiter view. Leave its existing default.
         communicationState: appendEvent(application.communicationState, {
           type: "interview_completed",
           label: "Interview completed",
