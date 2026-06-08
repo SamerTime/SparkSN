@@ -845,10 +845,13 @@ export async function listQuestionRepositoryRows(): Promise<
   // enriching any overlapping questionId — so no question is ever hidden.
   const fromJsonb = await listQuestionRepositoryRowsFromJsonb();
   const fromTables = (await listQuestionRepositoryRowsFromTables()) ?? [];
-  const byId = new Map<string, SparkQuestionRepositoryRow>();
-  for (const row of fromJsonb) byId.set(row.questionId, row);
-  for (const row of fromTables) byId.set(row.questionId, row);
-  const rows = [...byId.values()];
+  // Key by bank + question: these pre-existing banks reuse question ids
+  // (q1..q10) across every bank, so deduping on questionId alone collapses all
+  // 90 down to 10. A bank+question key keeps every question-in-every-bank.
+  const byKey = new Map<string, SparkQuestionRepositoryRow>();
+  for (const row of fromJsonb) byKey.set(`${row.bankId}::${row.questionId}`, row);
+  for (const row of fromTables) byKey.set(`${row.bankId}::${row.questionId}`, row);
+  const rows = [...byKey.values()];
   const tallies = await loadFeedbackTalliesByQuestion();
   for (const row of rows) {
     const t = tallies.get(row.questionId);
