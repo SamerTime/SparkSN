@@ -18,6 +18,8 @@ type InterviewAnswer = {
   targetSeconds?: number | null;
   generatorLabel?: string;
   mcpRunId?: string | null;
+  mode?: string;
+  reason?: string;
 };
 
 function stringValue(value: unknown) {
@@ -49,6 +51,10 @@ function answersValue(value: unknown): InterviewAnswer[] {
       targetSeconds: numberValue(item.targetSeconds),
       generatorLabel: stringValue(item.generatorLabel) || undefined,
       mcpRunId: stringValue(item.mcpRunId) || null,
+      // Preserve the answer modality so the recruiter view can flag typed
+      // (non-spoken) answers with their reason (Spark-owned Typed chip).
+      mode: stringValue(item.mode) || undefined,
+      reason: stringValue(item.reason) || undefined,
     }))
     .filter((item) => item.question && item.answer);
 }

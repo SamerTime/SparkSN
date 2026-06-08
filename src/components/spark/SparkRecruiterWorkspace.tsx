@@ -11,7 +11,6 @@ import {
   Loader2,
   Mail,
   MapPin,
-  MessageSquareText,
   MoreVertical,
   PanelRightOpen,
   Phone,
@@ -28,8 +27,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SparkInitials } from "@/components/spark/SparkBrand";
-import { SparkRecruiterActions } from "@/components/spark/SparkRecruiterActions";
 import { RogerCandidateCoach } from "@/components/spark/RogerCandidateCoach";
+import {
+  ScreeningChips,
+  typedChip,
+  type ChipTone,
+  type ScreeningChip,
+} from "@/components/spark/SparkScreeningChips";
+import { SparkActivityLog } from "@/components/spark/SparkActivityLog";
+import { SparkCandidateActionsMenu } from "@/components/spark/SparkCandidateActionsMenu";
 import {
   SparkCandidateStepper,
   wasInvited,
@@ -59,6 +65,8 @@ type InterviewAnswer = {
   targetSeconds?: number | null;
   generatorLabel?: string;
   mcpRunId?: string | null;
+  mode?: string;
+  reason?: string;
 };
 
 type RecordingView = {
@@ -243,8 +251,37 @@ function interviewAnswers(value: unknown): InterviewAnswer[] {
       generatorLabel:
         stringValue(item.generatorLabel) || stringValue(item.generator_label),
       mcpRunId: stringValue(item.mcpRunId) || stringValue(item.mcp_run_id) || null,
+      mode: stringValue(item.mode),
+      reason: stringValue(item.reason),
     }))
     .filter((item) => item.question && item.answer);
+}
+
+// Roger per-answer chips keyed by one-based questionIndex (handoff spec).
+function rogerAnswerChipsByIndex(value: unknown): Map<number, ScreeningChip[]> {
+  const map = new Map<number, ScreeningChip[]>();
+  const answers = jsonObject(value).answers;
+  if (!Array.isArray(answers)) return map;
+  for (const entry of answers) {
+    const a = jsonObject(entry);
+    const qi = typeof a.questionIndex === "number" ? a.questionIndex : NaN;
+    if (!Number.isFinite(qi)) continue;
+    const chips = (Array.isArray(a.chips) ? a.chips : [])
+      .map((c) => {
+        const co = jsonObject(c);
+        const tone = stringValue(co.tone);
+        return {
+          label: stringValue(co.label),
+          tone: (["green", "blue", "amber", "red"].includes(tone)
+            ? tone
+            : "blue") as ChipTone,
+          evidence: stringValue(co.evidence) || undefined,
+        };
+      })
+      .filter((c) => c.label);
+    map.set(qi, chips);
+  }
+  return map;
 }
 
 // Started the screen but never submitted (abandoned / in-progress).
@@ -371,6 +408,40 @@ function formatStatus(status: string) {
   return status.replace(/([a-z])([A-Z])/g, "$1 $2");
 }
 
+// Funnel buckets shown on the selected job header: candidate counts by stage.
+const STATUS_FUNNEL: { label: string; statuses: string[]; tone: string }[] = [
+  {
+    label: "Applied",
+    statuses: ["Applied", "ProfileStarted", "RecruiterApproved"],
+    tone: "text-[var(--sn-ink)]",
+  },
+  {
+    label: "AI Screen Invited",
+    statuses: ["InterviewInvited", "InProcess", "InterviewStarted"],
+    tone: "text-[var(--sn-blue-700)]",
+  },
+  {
+    label: "Screening Complete",
+    statuses: ["Complete", "InterviewCompleted", "RecruiterReview", "Reviewing"],
+    tone: "text-[var(--sn-blue-700)]",
+  },
+  {
+    label: "In-Person",
+    statuses: ["Vetted", "Shortlisted"],
+    tone: "text-[var(--sn-coral-600)]",
+  },
+  {
+    label: "Hired",
+    statuses: ["Offer"],
+    tone: "text-[var(--sn-success)]",
+  },
+  {
+    label: "Rejected",
+    statuses: ["Declined"],
+    tone: "text-[var(--sn-muted)]",
+  },
+];
+
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
@@ -458,19 +529,6 @@ function candidateLocation(application: SparkRecruiterApplicationView) {
   return [application.candidate?.city, application.candidate?.state]
     .filter(Boolean)
     .join(", ");
-}
-
-function interviewLabel(application: SparkRecruiterApplicationView) {
-  if (application.status === "Complete" || application.status === "InterviewCompleted") return "Complete";
-  if (application.status === "InProcess" || application.status === "InterviewStarted") return "In process";
-  if (application.status === "InterviewInvited") return "Interview invited";
-  if (application.status === "Invited") return "Invited to apply";
-  if (application.status === "Reviewing" || application.status === "RecruiterReview") return "Reviewing";
-  if (application.status === "Shortlisted" || application.status === "Vetted") return "Shortlist";
-  if (application.status === "Offer") return "Offer";
-  if (application.status === "RecruiterApproved") return "Approved";
-  if (application.status === "Declined") return "Declined";
-  return "Needs review";
 }
 
 function buildJobOrders(
@@ -872,26 +930,13 @@ export function SparkRecruiterWorkspace({
 
         <section className="min-w-0">
           <div className="sn-card overflow-hidden">
-            <div className="border-b border-[var(--sn-line)] bg-white p-5">
+            <div className="border-b border-[var(--sn-blue-200)] bg-[var(--sn-blue-50)] p-5">
               <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 <div className="min-w-0">
                   <p className="sn-eyebrow">Selected job order</p>
                   <h2 className="mt-2 text-2xl font-extrabold text-[var(--sn-ink)]">
                     {selectedJob?.title || "Job order"}
                   </h2>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <span className="sn-chip">
-                      {selectedJob?.clientName || "Spark client"}
-                    </span>
-                    <span className="sn-chip">
-                      {selectedApplications.length} candidates
-                    </span>
-                    {selectedJob?.lastSyncedAt && (
-                      <span className="sn-chip">
-                        Synced {formatDate(selectedJob.lastSyncedAt)}
-                      </span>
-                    )}
-                  </div>
                 </div>
                 <div className="flex flex-col gap-2 md:items-end">
                   <div className="flex items-center gap-2">
@@ -930,6 +975,16 @@ export function SparkRecruiterWorkspace({
                           <ArrowRight className="h-4 w-4" />
                         </Link>
                       </Button>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2 md:justify-end">
+                    <span className="sn-chip">
+                      {selectedJob?.clientName || "Spark client"}
+                    </span>
+                    {selectedJob?.lastSyncedAt && (
+                      <span className="sn-chip">
+                        Synced {formatDate(selectedJob.lastSyncedAt)}
+                      </span>
                     )}
                   </div>
                   {jobInviteOpen && (
@@ -972,6 +1027,26 @@ export function SparkRecruiterWorkspace({
                     </form>
                   )}
                 </div>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-[var(--sn-line)] bg-white px-4 py-2 text-xs">
+                {STATUS_FUNNEL.map((bucket) => {
+                  const count = selectedApplications.filter((application) =>
+                    bucket.statuses.includes(application.status)
+                  ).length;
+                  return (
+                    <span
+                      key={bucket.label}
+                      className={`inline-flex items-center gap-1 ${
+                        count > 0
+                          ? bucket.tone
+                          : "text-[var(--sn-muted)] opacity-50"
+                      }`}
+                    >
+                      <span className="font-extrabold">{count}</span>
+                      <span className="font-medium">{bucket.label}</span>
+                    </span>
+                  );
+                })}
               </div>
             </div>
 
@@ -1646,8 +1721,8 @@ function CandidateDetailDrawer({
 }) {
   const name = candidateName(application);
   const location = locationSummary(application.locationSignals);
-  const events = communicationEvents(application.communicationState);
   const answers = interviewAnswers(application.interviewTranscript);
+  const rogerAnswerChips = rogerAnswerChipsByIndex(application.aiSummary);
   const recordingView = application.recordingView;
   const profileLocation = candidateLocation(application);
   const aiSummaryChips = summaryChips(application.aiSummary);
@@ -1686,6 +1761,23 @@ function CandidateDetailDrawer({
                       Invited
                     </span>
                   )}
+                  {location && (
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-bold ${
+                        location.needsReview
+                          ? "border-[var(--sn-coral-100)] bg-[var(--sn-coral-50)] text-[var(--sn-coral-600)]"
+                          : "border-[#bde8ce] bg-[var(--sn-success-50)] text-[var(--sn-success)]"
+                      }`}
+                      title={location.label}
+                    >
+                      {location.needsReview ? (
+                        <ShieldAlert className="h-3 w-3" />
+                      ) : (
+                        <MapPin className="h-3 w-3" />
+                      )}
+                      {profileLocation || location.label}
+                    </span>
+                  )}
                 </div>
                 <p className="mt-1 text-sm text-[var(--sn-muted)]">
                   {application.posting.title}
@@ -1722,16 +1814,19 @@ function CandidateDetailDrawer({
                 </div>
               </div>
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              className="shrink-0 border-[var(--sn-line)]"
-              onClick={onClose}
-              title="Close candidate details"
-            >
-              <X className="h-4 w-4" />
-            </Button>
+            <div className="flex shrink-0 items-center gap-2">
+              <SparkCandidateActionsMenu applicationId={application.id} />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="shrink-0 border-[var(--sn-line)]"
+                onClick={onClose}
+                title="Close candidate details"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </header>
 
@@ -1788,31 +1883,6 @@ function CandidateDetailDrawer({
                 aiSummary={application.aiSummary}
               />
 
-              <section
-                className={
-                  location.needsReview
-                    ? "rounded-lg border border-[var(--sn-coral-100)] bg-[var(--sn-coral-50)] p-4"
-                    : "rounded-lg border border-[#bde8ce] bg-[var(--sn-success-50)] p-4"
-                }
-              >
-                <div className="flex items-center gap-2 text-sm font-extrabold text-[var(--sn-ink)]">
-                  {location.needsReview ? (
-                    <ShieldAlert className="h-4 w-4 text-[var(--sn-coral-600)]" />
-                  ) : (
-                    <MapPin className="h-4 w-4 text-[var(--sn-success)]" />
-                  )}
-                  Location and identity signal
-                </div>
-                <p
-                  className={
-                    location.needsReview
-                      ? "mt-3 text-sm font-bold leading-6 text-[var(--sn-coral-600)]"
-                      : "mt-3 text-sm font-bold leading-6 text-[var(--sn-success)]"
-                  }
-                >
-                  {profileLocation ? `${profileLocation}. ${location.label}` : location.label}
-                </p>
-              </section>
 
               {recordingView && (
                 <section className="rounded-lg border border-[var(--sn-line)] bg-white p-4">
@@ -1862,156 +1932,60 @@ function CandidateDetailDrawer({
                         <p className="text-sm font-extrabold leading-6 text-[var(--sn-ink)]">
                           {index + 1}. {item.question}
                         </p>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {item.sourceLabel && (
-                            <span className="sn-chip sn-chip-blue py-1 text-xs">
-                              {item.sourceLabel}
-                            </span>
-                          )}
-                          {item.type && (
-                            <span className="sn-chip py-1 text-xs">
-                              {item.type.replace(/_/g, " ")}
-                            </span>
-                          )}
-                          {item.generatorLabel && (
-                            <span className="sn-chip py-1 text-xs">
-                              {item.generatorLabel}
-                            </span>
-                          )}
-                          {item.mcpRunId && (
-                            <span className="sn-chip py-1 text-xs">
-                              MCP {item.mcpRunId.slice(0, 8)}
-                            </span>
-                          )}
-                        </div>
+                        <details className="mt-2">
+                          <summary className="cursor-pointer list-none text-xs font-bold text-[var(--sn-muted)] hover:text-[var(--sn-ink)]">
+                            Question details
+                          </summary>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {item.sourceLabel && (
+                              <span className="sn-chip sn-chip-blue py-1 text-xs">
+                                {item.sourceLabel}
+                              </span>
+                            )}
+                            {item.type && (
+                              <span className="sn-chip py-1 text-xs">
+                                {item.type.replace(/_/g, " ")}
+                              </span>
+                            )}
+                            {item.generatorLabel && (
+                              <span className="sn-chip py-1 text-xs">
+                                {item.generatorLabel}
+                              </span>
+                            )}
+                            {item.mcpRunId && (
+                              <span className="sn-chip py-1 text-xs">
+                                MCP {item.mcpRunId.slice(0, 8)}
+                              </span>
+                            )}
+                          </div>
+                        </details>
                         <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-[var(--sn-muted)]">
                           {item.answer}
                         </p>
+                        {(() => {
+                          const chips = [
+                            ...(rogerAnswerChips.get(index + 1) || []),
+                          ];
+                          const typed = typedChip(item.mode, item.reason);
+                          if (typed) chips.unshift(typed);
+                          return chips.length ? (
+                            <ScreeningChips chips={chips} className="mt-2" />
+                          ) : null;
+                        })()}
                       </li>
                     ))}
                   </ol>
                 )}
               </section>
 
-              <section className="rounded-lg border border-[var(--sn-line)] bg-white p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-2 text-sm font-extrabold text-[var(--sn-ink)]">
-                    <MessageSquareText className="h-4 w-4 text-[var(--sn-blue)]" />
-                    Communication log
-                  </div>
-                  <span className="sn-chip py-1 text-xs">
-                    {events.length} {events.length === 1 ? "event" : "events"}
-                  </span>
-                </div>
-
-                {events.length === 0 ? (
-                  <p className="mt-3 text-sm text-[var(--sn-muted)]">
-                    No communication events recorded yet.
-                  </p>
-                ) : (
-                  <ol className="mt-3 divide-y divide-[var(--sn-line)]">
-                    {events.map((event, index) => {
-                      const eventDate = formatEventDate(event.at);
-
-                      return (
-                        <li
-                          key={`${event.type}-${event.at}-${index}`}
-                          className="grid gap-1 py-3 first:pt-0 last:pb-0"
-                        >
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-bold text-[var(--sn-ink)]">
-                              {event.label || event.type || "Event"}
-                            </span>
-                            {event.channel && (
-                              <span className="sn-chip py-1 text-xs">
-                                {event.channel}
-                              </span>
-                            )}
-                            {eventDate && (
-                              <span className="text-xs text-[var(--sn-muted)]">
-                                {eventDate}
-                              </span>
-                            )}
-                          </div>
-                          {event.messagePreview && (
-                            <p className="text-sm leading-6 text-[var(--sn-muted)]">
-                              {event.messagePreview}
-                            </p>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ol>
-                )}
-              </section>
             </div>
 
             <aside className="space-y-4">
-              <section className="rounded-lg border border-[var(--sn-line)] bg-white p-4">
-                <h3 className="text-base font-extrabold text-[var(--sn-ink)]">
-                  Recruiter actions
-                </h3>
-                <p className="mt-2 text-sm leading-6 text-[var(--sn-muted)]">
-                  Save notes, update status, and prepare the next candidate
-                  communication.
-                </p>
-                <div className="mt-4">
-                  <SparkRecruiterActions
-                    applicationId={application.id}
-                    initialNotes={application.recruiterNotes || ""}
-                  />
-                </div>
-              </section>
+              <SparkActivityLog
+                applicationId={application.id}
+                communicationState={application.communicationState}
+              />
 
-              <section className="rounded-lg border border-[var(--sn-line)] bg-white p-4">
-                <h3 className="text-base font-extrabold text-[var(--sn-ink)]">
-                  Candidate snapshot
-                </h3>
-                <dl className="mt-3 grid gap-3 text-sm">
-                  <div>
-                    <dt className="text-xs font-extrabold uppercase text-[var(--sn-muted)]">
-                      Status
-                    </dt>
-                    <dd className="mt-1 font-bold text-[var(--sn-ink)]">
-                      {formatStatus(application.status)}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs font-extrabold uppercase text-[var(--sn-muted)]">
-                      Applied
-                    </dt>
-                    <dd className="mt-1 font-bold text-[var(--sn-ink)]">
-                      {formatDate(application.createdAt)}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs font-extrabold uppercase text-[var(--sn-muted)]">
-                      Last updated
-                    </dt>
-                    <dd className="mt-1 font-bold text-[var(--sn-ink)]">
-                      {formatDate(application.updatedAt)}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs font-extrabold uppercase text-[var(--sn-muted)]">
-                      Interview
-                    </dt>
-                    <dd className="mt-1 font-bold text-[var(--sn-ink)]">
-                      {interviewLabel(application)}
-                    </dd>
-                  </div>
-                  {profileLocation && (
-                    <div>
-                      <dt className="text-xs font-extrabold uppercase text-[var(--sn-muted)]">
-                        Profile location
-                      </dt>
-                      <dd className="mt-1 font-bold text-[var(--sn-ink)]">
-                        {profileLocation}
-                      </dd>
-                    </div>
-                  )}
-                </dl>
-              </section>
             </aside>
           </div>
         </div>
