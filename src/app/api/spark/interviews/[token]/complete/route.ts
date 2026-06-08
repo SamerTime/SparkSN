@@ -163,8 +163,15 @@ export async function POST(
     });
   } catch (error) {
     console.error("Spark interview complete error:", error);
+    // Fail loud: surface the real error so we can diagnose, not a generic mask.
     return NextResponse.json(
-      { success: false, error: "Unable to complete interview." },
+      {
+        success: false,
+        error:
+          error instanceof Error
+            ? `Complete failed: ${error.message}`
+            : "Unable to complete interview.",
+      },
       { status: 500 }
     );
   }
