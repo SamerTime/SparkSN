@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSparkRecruiterUser } from "@/lib/spark-auth";
 import { getSparkSettings, updateSparkSettings } from "@/lib/spark-settings";
 
-// Admin settings (auto-accept). Any logged-in recruiter can read/write for now;
+// Admin settings. Any logged-in recruiter can read/write for now;
 // roles/permissions will eventually be inherited from staffingnation.us.
 export async function GET() {
   const recruiter = await getSparkRecruiterUser();
@@ -26,7 +26,7 @@ export async function PUT(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => ({}));
-  const autoAcceptEnabled = body?.autoAcceptEnabled === true;
+  const autoInviteEnabled = body?.autoInviteEnabled === true;
   const autoAcceptDomains = Array.isArray(body?.autoAcceptDomains)
     ? Array.from(
         new Set(
@@ -42,7 +42,7 @@ export async function PUT(request: NextRequest) {
 
   try {
     const settings = await updateSparkSettings(
-      { autoAcceptEnabled, autoAcceptDomains },
+      { autoInviteEnabled, autoAcceptDomains },
       recruiter.email
     );
     return NextResponse.json({ success: true, settings });
