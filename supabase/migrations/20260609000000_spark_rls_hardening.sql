@@ -14,7 +14,8 @@
 --
 -- This closes the previously verified anon-readable exposures:
 --   - SparkQuestionBank        (interview questions leak — applicants could pre-load)
---   - spark_questions          (same questions via normalized mirror)
+--   - spark_questions / spark_question_bank_items (question-bank mirror)
+--   - spark_answers            (candidate interview answer text mirror)
 --   - SparkQuestionBankAuditEvent (recruiter activity timestamps)
 --   - SparkApplicationDeletionLog (deleted-candidate PII)
 --   - SparkJobPosting          (full rawPayload + internal fields)
@@ -35,7 +36,9 @@ declare
     'SparkSetting',
     'SparkQuestionFeedback',
     'SparkQuestion',
-    'spark_questions'
+    'spark_questions',
+    'spark_question_bank_items',
+    'spark_answers'
   ];
 begin
   foreach t in array spark_tables loop
@@ -48,6 +51,34 @@ begin
       execute format('alter table public.%I force row level security', t);
       execute format('revoke all on public.%I from anon', t);
       execute format('revoke all on public.%I from authenticated', t);
+    end if;
+  end loop;
+end$$;
+
+-- The mirror sync helpers are implementation details for triggers/backfills.
+-- PostgreSQL grants EXECUTE on new functions to PUBLIC by default; revoke it so
+-- browser clients cannot invoke the sync routines through Supabase RPC.
+-- service_role is granted back explicitly so server-side triggers and API routes
+-- continue to work (REVOKE FROM PUBLIC strips service_role's inherited grant).
+do $$
+declare
+  function_signature text;
+  function_regprocedure regprocedure;
+  spark_functions text[] := array[
+    'public.spark_question_intent(text,text)',
+    'public.spark_sync_question_bank(text)',
+    'public.spark_sync_application_answers(text)',
+    'public.spark_trg_sync_bank()',
+    'public.spark_trg_sync_answers()'
+  ];
+begin
+  foreach function_signature in array spark_functions loop
+    function_regprocedure := to_regprocedure(function_signature);
+    if function_regprocedure is not null then
+      execute format('revoke execute on function %s from public', function_regprocedure);
+      execute format('revoke execute on function %s from anon', function_regprocedure);
+      execute format('revoke execute on function %s from authenticated', function_regprocedure);
+      execute format('grant execute on function %s to service_role', function_regprocedure);
     end if;
   end loop;
 end$$;
