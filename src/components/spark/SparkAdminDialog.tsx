@@ -13,7 +13,7 @@ export function SparkAdminDialog({
 }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [enabled, setEnabled] = useState(false);
+  const [autoInviteEnabled, setAutoInviteEnabled] = useState(false);
   const [domainsText, setDomainsText] = useState("");
 
   useEffect(() => {
@@ -23,7 +23,7 @@ export function SparkAdminDialog({
       .then((r) => r.json())
       .then((data) => {
         if (data?.success) {
-          setEnabled(Boolean(data.settings.autoAcceptEnabled));
+          setAutoInviteEnabled(Boolean(data.settings.autoInviteEnabled));
           setDomainsText((data.settings.autoAcceptDomains || []).join("\n"));
         }
       })
@@ -41,13 +41,13 @@ export function SparkAdminDialog({
       const res = await fetch("/api/spark/admin/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ autoAcceptEnabled: enabled, autoAcceptDomains }),
+        body: JSON.stringify({ autoInviteEnabled, autoAcceptDomains }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success) {
         throw new Error(data?.error || "Couldn't save settings.");
       }
-      setEnabled(Boolean(data.settings.autoAcceptEnabled));
+      setAutoInviteEnabled(Boolean(data.settings.autoInviteEnabled));
       setDomainsText((data.settings.autoAcceptDomains || []).join("\n"));
       toast.success("Admin settings saved.");
     } catch (error) {
@@ -93,26 +93,31 @@ export function SparkAdminDialog({
             <>
               <section>
                 <h3 className="text-sm font-extrabold text-[var(--sn-ink)]">
-                  Auto-accept
+                  Trusted-domain auto-invite
                 </h3>
                 <p className="mt-1 text-xs leading-5 text-[var(--sn-muted)]">
-                  Applicants whose email domain is listed below skip recruiter
-                  review + the email invite and go straight into the AI
-                  screening.
+                  When an applicant&apos;s email domain matches the list below,
+                  Spark automatically sends them an AI screening invite — no
+                  recruiter review step required. The invite goes to their
+                  inbox, so the domain check is meaningful: only the real inbox
+                  owner can start the interview.
+                </p>
+                <p className="mt-1 text-xs leading-5 text-[var(--sn-muted)]">
+                  Requires an approved question bank on the job posting.
                 </p>
                 <label className="mt-3 flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
-                    checked={enabled}
-                    onChange={(e) => setEnabled(e.target.checked)}
+                    checked={autoInviteEnabled}
+                    onChange={(e) => setAutoInviteEnabled(e.target.checked)}
                     className="h-4 w-4"
                   />
                   <span className="font-bold text-[var(--sn-ink)]">
-                    Enable auto-accept
+                    Enable trusted-domain auto-invite
                   </span>
                 </label>
                 <label className="mt-4 block text-xs font-extrabold uppercase text-[var(--sn-muted)]">
-                  Allowed domains (one per line)
+                  Trusted domains (one per line)
                 </label>
                 <textarea
                   value={domainsText}
