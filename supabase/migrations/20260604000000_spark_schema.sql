@@ -101,8 +101,8 @@ create table if not exists "public"."SparkApplication" (
   constraint "SparkApplication_pkey" primary key ("id")
 );
 
-create unique index if not exists "SparkJobPosting_sourceEntityId_key"
-  on "public"."SparkJobPosting"("sourceEntityId");
+create unique index if not exists "SparkJobPosting_source_identity_key"
+  on "public"."SparkJobPosting"("sourceSystem", "sourceEntityType", "sourceEntityId");
 
 create unique index if not exists "SparkJobPosting_slug_key"
   on "public"."SparkJobPosting"("slug");
