@@ -1,12 +1,12 @@
 import { getSparkSupabase } from "@/lib/spark-db";
 
 export type SparkSettings = {
-  autoAcceptEnabled: boolean;
+  autoInviteEnabled: boolean;
   autoAcceptDomains: string[];
 };
 
 const DEFAULT_SETTINGS: SparkSettings = {
-  autoAcceptEnabled: false,
+  autoInviteEnabled: false,
   autoAcceptDomains: [],
 };
 
@@ -17,17 +17,17 @@ function asDomains(value: unknown): string[] {
 }
 
 // Reads the singleton settings row. Defaults to OFF if the table/row isn't there
-// yet (e.g. the migration hasn't been applied) — never throws, never bypasses.
+// yet — never throws, never bypasses.
 export async function getSparkSettings(): Promise<SparkSettings> {
   try {
     const { data, error } = await getSparkSupabase()
       .from("SparkSetting")
-      .select("autoAcceptEnabled,autoAcceptDomains")
+      .select("autoInviteEnabled,autoAcceptDomains")
       .eq("id", "singleton")
       .maybeSingle();
     if (error || !data) return DEFAULT_SETTINGS;
     return {
-      autoAcceptEnabled: Boolean(data.autoAcceptEnabled),
+      autoInviteEnabled: Boolean(data.autoInviteEnabled),
       autoAcceptDomains: asDomains(data.autoAcceptDomains),
     };
   } catch {
@@ -43,23 +43,23 @@ export async function updateSparkSettings(
     .from("SparkSetting")
     .upsert({
       id: "singleton",
-      autoAcceptEnabled: values.autoAcceptEnabled,
+      autoInviteEnabled: values.autoInviteEnabled,
       autoAcceptDomains: values.autoAcceptDomains,
       updatedByEmail,
       updatedAt: new Date().toISOString(),
     })
-    .select("autoAcceptEnabled,autoAcceptDomains")
+    .select("autoInviteEnabled,autoAcceptDomains")
     .single();
   if (error) {
     throw new Error(error.message || "Unable to update Spark settings.");
   }
   return {
-    autoAcceptEnabled: Boolean(data.autoAcceptEnabled),
+    autoInviteEnabled: Boolean(data.autoInviteEnabled),
     autoAcceptDomains: asDomains(data.autoAcceptDomains),
   };
 }
 
-// True if the email's domain matches an allowlisted domain (incl. subdomains,
+// True if the email's domain matches a trusted domain (incl. subdomains,
 // e.g. "tcwglobal.com" matches alice@hr.tcwglobal.com and "*.tcwglobal.com").
 export function emailMatchesAutoAcceptDomain(
   email: string,
