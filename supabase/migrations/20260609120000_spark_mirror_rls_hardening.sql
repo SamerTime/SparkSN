@@ -50,6 +50,7 @@ BEGIN
       EXECUTE format('REVOKE EXECUTE ON FUNCTION %s FROM PUBLIC', function_regprocedure);
       EXECUTE format('REVOKE EXECUTE ON FUNCTION %s FROM anon', function_regprocedure);
       EXECUTE format('REVOKE EXECUTE ON FUNCTION %s FROM authenticated', function_regprocedure);
+      EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO service_role', function_regprocedure);
     END IF;
   END LOOP;
 END $$;
