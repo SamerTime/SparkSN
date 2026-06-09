@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   getApplicationByInterviewToken,
+  SPARK_INTERVIEW_RECORDINGS_BUCKET,
   updateApplication,
   type JsonValue,
 } from "@/lib/spark-db";
@@ -16,6 +17,43 @@ function str(value: unknown): string {
 function num(value: unknown): number {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
+}
+
+function finiteNumber(value: unknown): number | null {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function sessionQuestions(application: { interviewMedia?: unknown }) {
+  const media = obj(application.interviewMedia);
+  const session = obj(media.session);
+  return Array.isArray(session.questions) ? session.questions : [];
+}
+
+function sessionExpiresAt(application: { interviewMedia?: unknown }) {
+  const media = obj(application.interviewMedia);
+  const session = obj(media.session);
+  return str(session.expiresAt);
+}
+
+function isExpired(expiresAt: string, nowMs: number) {
+  if (!expiresAt) return false;
+  const expiresMs = Date.parse(expiresAt);
+  return Number.isFinite(expiresMs) && expiresMs <= nowMs;
+}
+
+function validRecordingStorage(
+  storage: Record<string, unknown>,
+  applicationId: string
+) {
+  const bucket = str(storage.bucket);
+  const path = str(storage.path);
+
+  return (
+    path.length > 0 &&
+    path.startsWith(`${applicationId}/`) &&
+    (!bucket || bucket === SPARK_INTERVIEW_RECORDINGS_BUCKET)
+  );
 }
 
 const TYPED_REASONS = new Set([
@@ -46,19 +84,46 @@ export async function POST(
       );
     }
 
+    if (application.status === "InterviewCompleted") {
+      return NextResponse.json(
+        { success: false, error: "Interview is already completed." },
+        { status: 409 }
+      );
+    }
+
+    if (isExpired(sessionExpiresAt(application), Date.now())) {
+      return NextResponse.json(
+        { success: false, error: "Interview session has expired." },
+        { status: 410 }
+      );
+    }
+
     const body = obj(await request.json());
-    const questionIndex = num(body.questionIndex);
+    const questions = sessionQuestions(application);
+    const questionIndex = finiteNumber(body.questionIndex);
+    if (
+      questionIndex === null ||
+      !Number.isInteger(questionIndex) ||
+      questionIndex < 0 ||
+      questionIndex >= questions.length
+    ) {
+      return NextResponse.json(
+        { success: false, error: "Question index is not valid." },
+        { status: 400 }
+      );
+    }
     const mode = str(body.mode) === "typed" ? "typed" : "spoken";
 
     const transcript = "";
     let clipPath = "";
     if (mode === "spoken") {
-      clipPath = str(obj(obj(body.recording).storage).path);
-      if (!clipPath) {
+      const recordingStorage = obj(obj(body.recording).storage);
+      clipPath = str(recordingStorage.path);
+      if (!validRecordingStorage(recordingStorage, application.id)) {
         return NextResponse.json(
           {
             success: false,
-            error: "A recording clip path is required for a spoken answer.",
+            error: "A valid recording clip path is required for this interview.",
           },
           { status: 400 }
         );
