@@ -42,7 +42,8 @@ import {
 } from "@/components/spark/SparkCandidateStepper";
 import { SparkCandidateContact } from "@/components/spark/SparkCandidateContact";
 import type {
-  SparkApplicationWithRelations,
+  JsonValue,
+  SparkApplicationStatus,
   SparkPublishedJobListItem,
   SparkQuestionBankListItem,
 } from "@/lib/spark-db";
@@ -78,7 +79,34 @@ type RecordingView = {
   signedUrl: string;
 };
 
-export type SparkRecruiterApplicationView = SparkApplicationWithRelations & {
+export type SparkRecruiterApplicationView = {
+  id: string;
+  postingId: string;
+  candidateEmail: string | null;
+  candidateName: string | null;
+  candidatePhone: string | null;
+  status: SparkApplicationStatus;
+  recruiterNotes: string | null;
+  communicationState: JsonValue;
+  locationSignals: JsonValue;
+  interviewMedia: JsonValue;
+  interviewTranscript: JsonValue;
+  aiSummary: JsonValue;
+  createdAt: string;
+  updatedAt: string;
+  posting: {
+    title: string;
+    slug: string;
+    clientName: string | null;
+  };
+  candidate: {
+    firstName: string | null;
+    lastName: string | null;
+    email: string;
+    phone: string | null;
+    city: string | null;
+    state: string | null;
+  } | null;
   recordingView: RecordingView | null;
 };
 
@@ -323,7 +351,10 @@ function locationSummary(value: unknown) {
   const captureStatus =
     typeof capture.status === "string" ? capture.status : "";
 
-  if (typeof browserLocation.latitude === "number") {
+  if (
+    typeof browserLocation.latitude === "number" ||
+    browserLocation.captured === true
+  ) {
     return {
       label: "Browser location captured",
       needsReview: false,

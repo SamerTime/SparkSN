@@ -15,6 +15,8 @@ import {
   listPublishedJobs,
   listRecruiterApplications,
   SPARK_INTERVIEW_RECORDINGS_BUCKET,
+  type JsonValue,
+  type SparkApplicationWithRelations,
 } from "@/lib/spark-db";
 import {
   SparkRecruiterWorkspace,
@@ -44,6 +46,124 @@ function jsonObject(value: unknown): Record<string, unknown> {
 function numberValue(value: unknown) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function jsonValue(value: unknown): JsonValue {
+  if (value === null) return null;
+  if (["string", "number", "boolean"].includes(typeof value)) {
+    return value as JsonValue;
+  }
+  if (Array.isArray(value)) {
+    return value.map(jsonValue) as JsonValue;
+  }
+  if (typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+        key,
+        jsonValue(item),
+      ])
+    ) as JsonValue;
+  }
+  return null;
+}
+
+function sanitizedLocationSignals(value: unknown): JsonValue {
+  const signals = jsonObject(value);
+  const browserLocation = jsonObject(signals.browserGeolocation);
+  const providedLocation = jsonObject(signals.candidateProvidedLocation);
+  const capture = jsonObject(signals.capture);
+
+  return {
+    browserGeolocation: {
+      captured: typeof browserLocation.latitude === "number",
+    },
+    candidateProvidedLocation: {
+      city:
+        typeof providedLocation.city === "string" ? providedLocation.city : "",
+      state:
+        typeof providedLocation.state === "string"
+          ? providedLocation.state
+          : "",
+    },
+    capture: {
+      status: typeof capture.status === "string" ? capture.status : "",
+    },
+  };
+}
+
+function sanitizedInterviewMedia(value: unknown): JsonValue {
+  const media = jsonObject(value);
+  const session = jsonObject(media.session);
+  const recording = jsonObject(session.recording);
+  const sanitizedSession: Record<string, JsonValue> = {};
+
+  for (const key of [
+    "status",
+    "invitedAt",
+    "startedAt",
+    "completedAt",
+    "expiresAt",
+  ]) {
+    if (typeof session[key] === "string") {
+      sanitizedSession[key] = session[key] as string;
+    }
+  }
+
+  if (Array.isArray(session.questions)) {
+    sanitizedSession.questions = session.questions.map(jsonValue) as JsonValue;
+  }
+
+  if (Object.keys(recording).length > 0) {
+    sanitizedSession.recording = {
+      captured: Boolean(recording.captured),
+      durationSeconds: numberValue(recording.durationSeconds),
+      mimeType:
+        typeof recording.mimeType === "string" ? recording.mimeType : "",
+      sizeBytes: numberValue(recording.sizeBytes),
+    };
+  }
+
+  return Object.keys(sanitizedSession).length > 0
+    ? { session: sanitizedSession }
+    : {};
+}
+
+function recruiterApplicationView(
+  application: SparkApplicationWithRelations,
+  recordingView: RecordingView | null
+): SparkRecruiterApplicationView {
+  return {
+    id: application.id,
+    postingId: application.postingId,
+    candidateEmail: application.candidateEmail,
+    candidateName: application.candidateName,
+    candidatePhone: application.candidatePhone,
+    status: application.status,
+    recruiterNotes: application.recruiterNotes,
+    communicationState: application.communicationState,
+    locationSignals: sanitizedLocationSignals(application.locationSignals),
+    interviewMedia: sanitizedInterviewMedia(application.interviewMedia),
+    interviewTranscript: application.interviewTranscript,
+    aiSummary: application.aiSummary,
+    createdAt: application.createdAt,
+    updatedAt: application.updatedAt,
+    posting: {
+      title: application.posting.title,
+      slug: application.posting.slug,
+      clientName: application.posting.clientName,
+    },
+    candidate: application.candidate
+      ? {
+          firstName: application.candidate.firstName,
+          lastName: application.candidate.lastName,
+          email: application.candidate.email,
+          phone: application.candidate.phone,
+          city: application.candidate.city,
+          state: application.candidate.state,
+        }
+      : null,
+    recordingView,
+  };
 }
 
 function recordingReference(value: unknown): RecordingReference | null {
@@ -129,12 +249,13 @@ export default async function SparkRecruiterPage({
     statusRows.filter((item) => item.status === "InterviewCompleted").length;
   const postingCount = publishedJobs.length;
   const recruiterApplications: SparkRecruiterApplicationView[] =
-    applications.map((application) => ({
-      ...application,
-      recordingView:
+    applications.map((application) =>
+      recruiterApplicationView(
+        application,
         (recordingViewsById.get(application.id) as RecordingView | null) ||
-        null,
-    }));
+          null
+      )
+    );
 
   return (
     <main className="sn-page">
