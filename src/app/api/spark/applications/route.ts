@@ -487,7 +487,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       applicationId: application.id,
-      status: application.status,
+      status: autoInviteSent ? "InterviewInvited" : application.status,
       interviewUrl: null,
       nextStep: autoInviteSent
         ? "You've been fast-tracked — check your email for your AI screening link."
