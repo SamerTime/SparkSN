@@ -57,8 +57,9 @@ end$$;
 
 -- The mirror sync helpers are implementation details for triggers/backfills.
 -- PostgreSQL grants EXECUTE on new functions to PUBLIC by default; revoke it so
--- browser clients cannot invoke the sync routines through Supabase RPC. Triggers
--- and service-role migrations continue to execute them without public grants.
+-- browser clients cannot invoke the sync routines through Supabase RPC.
+-- service_role is granted back explicitly so server-side triggers and API routes
+-- continue to work (REVOKE FROM PUBLIC strips service_role's inherited grant).
 do $$
 declare
   function_signature text;
@@ -77,6 +78,7 @@ begin
       execute format('revoke execute on function %s from public', function_regprocedure);
       execute format('revoke execute on function %s from anon', function_regprocedure);
       execute format('revoke execute on function %s from authenticated', function_regprocedure);
+      execute format('grant execute on function %s to service_role', function_regprocedure);
     end if;
   end loop;
 end$$;
