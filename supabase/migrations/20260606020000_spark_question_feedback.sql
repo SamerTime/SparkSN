@@ -22,6 +22,17 @@ CREATE TABLE IF NOT EXISTS public.spark_question_feedback (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+-- This table stores recruiter-only learning signals and lessons. The
+-- application writes and reads it exclusively through server-side API routes
+-- backed by the Supabase service role, so direct Supabase client access must
+-- remain closed even though the table lives in the exposed public schema.
+ALTER TABLE public.spark_question_feedback ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.spark_question_feedback FORCE ROW LEVEL SECURITY;
+
+REVOKE ALL ON TABLE public.spark_question_feedback FROM anon;
+REVOKE ALL ON TABLE public.spark_question_feedback FROM authenticated;
+GRANT ALL ON TABLE public.spark_question_feedback TO service_role;
+
 CREATE INDEX IF NOT EXISTS idx_spark_question_feedback_question
   ON public.spark_question_feedback(question_id);
 CREATE INDEX IF NOT EXISTS idx_spark_question_feedback_kind
