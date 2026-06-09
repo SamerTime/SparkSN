@@ -306,3 +306,78 @@ export async function sendSparkApplyInvite(
     },
   });
 }
+
+function buildAutoInterviewInviteContent(input: SparkInterviewInviteInput) {
+  const candidateName = plainName(input.candidateName);
+  const clientLine = cleanText(input.clientName)
+    ? ` for ${cleanText(input.clientName)}`
+    : "";
+  const subject = "Your Spark interview is ready";
+  const text = [
+    `Hi ${candidateName},`,
+    "",
+    `Great news — your application for ${input.jobTitle}${clientLine} has been fast-tracked to the AI screening step.`,
+    "",
+    "What to expect:",
+    "- The interview is short and phone-friendly.",
+    "- Please use a quiet place with a working camera and microphone.",
+    "- Keep your answers focused on the job, your experience, and your availability.",
+    "- Spark may use location and device signals with your consent to reduce fraud and protect candidate identity.",
+    "",
+    `Start your interview here: ${input.interviewUrl}`,
+    "",
+    "A recruiter will follow up with the next instructions.",
+    "",
+    "Thank you,",
+    "StaffingNation Spark",
+  ].join("\n");
+
+  const html = `
+    <div style="font-family:Arial,Helvetica,sans-serif;color:#172033;line-height:1.55">
+      <p>Hi ${escapeHtml(candidateName)},</p>
+      <p>
+        Great news — your application for
+        <strong>${escapeHtml(input.jobTitle)}</strong>${escapeHtml(clientLine)}
+        has been fast-tracked to the AI screening step.
+      </p>
+      <p><strong>What to expect:</strong></p>
+      <ul>
+        <li>The interview is short and phone-friendly.</li>
+        <li>Please use a quiet place with a working camera and microphone.</li>
+        <li>Keep your answers focused on the job, your experience, and your availability.</li>
+        <li>Spark may use location and device signals with your consent to reduce fraud and protect candidate identity.</li>
+      </ul>
+      <p>
+        <a href="${escapeHtml(input.interviewUrl)}" style="color:#2563eb;font-weight:700">
+          Start interview
+        </a>
+      </p>
+      <p>A recruiter will follow up with the next instructions.</p>
+      <p>Thank you,<br />StaffingNation Spark</p>
+    </div>
+  `;
+
+  return { subject, text, html };
+}
+
+export async function sendSparkAutoInterviewInvite(
+  input: SparkInterviewInviteInput
+): Promise<SparkNotificationSendResult> {
+  const recipientEmail = cleanText(input.recipientEmail);
+  if (!recipientEmail) {
+    return { ok: false, errorCode: "missing_recipient_email" };
+  }
+
+  const content = buildAutoInterviewInviteContent(input);
+  return sendCourierEmail({
+    recipientEmail,
+    subject: content.subject,
+    text: content.text,
+    html: content.html,
+    data: {
+      applicationId: input.applicationId,
+      jobTitle: input.jobTitle,
+      interviewUrl: input.interviewUrl,
+    },
+  });
+}
