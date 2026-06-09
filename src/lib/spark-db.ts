@@ -1108,12 +1108,14 @@ export async function upsertJobPostingBySourceEntityId(
   values: Omit<
     Partial<SparkJobPosting>,
     "id" | "sourceEntityId" | "createdAt" | "updatedAt"
-  >
+  > & Pick<SparkJobPosting, "sourceSystem" | "sourceEntityType">
 ): Promise<SparkPostingWriteResult> {
   const supabase = getSparkSupabase();
   const existing = await supabase
     .from("SparkJobPosting")
     .select("id,createdAt")
+    .eq("sourceSystem", values.sourceSystem)
+    .eq("sourceEntityType", values.sourceEntityType)
     .eq("sourceEntityId", sourceEntityId)
     .maybeSingle();
 
@@ -1131,6 +1133,9 @@ export async function upsertJobPostingBySourceEntityId(
         updatedAt: timestamp,
       })
       .eq("id", existing.data.id)
+      .eq("sourceSystem", values.sourceSystem)
+      .eq("sourceEntityType", values.sourceEntityType)
+      .eq("sourceEntityId", sourceEntityId)
       .select("id,publicUrl,sourceEntityId")
       .single();
 
