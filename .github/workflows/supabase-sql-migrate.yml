@@ -19,16 +19,19 @@ concurrency:
 jobs:
   migrate:
     name: Deploy Supabase SQL migrations
+    if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
-    env:
-      DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+    environment: production
 
     steps:
       - name: Check required secret
-        if: ${{ env.DATABASE_URL == '' }}
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
         run: |
-          echo "Missing SUPABASE_DATABASE_URL repository secret."
-          exit 1
+          if [ -z "$DATABASE_URL" ]; then
+            echo "Missing SUPABASE_DATABASE_URL repository secret."
+            exit 1
+          fi
 
       - name: Check out repository
         uses: actions/checkout@v4
@@ -40,6 +43,8 @@ jobs:
 
       - name: Deploy SQL migrations to Supabase
         shell: bash
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
         run: |
           set -euo pipefail
           shopt -s nullglob
