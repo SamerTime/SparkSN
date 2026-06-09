@@ -115,8 +115,10 @@ postgresql://postgres.xmidhrqlfsnkhoadpgsh:<DB_PASSWORD>@aws-1-us-west-2.pooler.
 ```
 
 Replace `<DB_PASSWORD>` with the actual database password, with no brackets.
-The workflow runs manually and on pushes to `main` when SQL migration files
-change.
+Keep this secret scoped to the `production` GitHub Environment and configure
+required reviewers for that environment before enabling automated migrations.
+The workflow runs on pushes to `main` when SQL migration files change. Manual
+runs are also limited to the `main` branch by the workflow job guard.
 
 ## Cloudflare Pairing
 
