@@ -3,13 +3,20 @@ import {
   createApplication,
   findApplicationByPostingAndEmail,
   findJobInvitationByPostingAndEmail,
+  getApprovedQuestionBankForPosting,
   getPublishedPostingForApplication,
+  interviewQuestionsFromBank,
   type JsonValue,
   type SparkApplicationStatus,
   updateApplication,
   updateJobInvitation,
   upsertCandidateProfileByEmail,
 } from "@/lib/spark-db";
+import {
+  emailMatchesAutoAcceptDomain,
+  getSparkSettings,
+} from "@/lib/spark-settings";
+import { sendSparkAutoInterviewInvite } from "@/lib/spark-notifications";
 
 function stringValue(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -96,6 +103,14 @@ function locationReviewReason(
     return "Candidate consented, but browser location capture failed.";
   }
   return "Candidate consented, but browser location was not captured.";
+}
+
+function interviewToken() {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
+    ""
+  );
 }
 
 export async function POST(request: NextRequest) {
@@ -379,14 +394,106 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Trusted-domain auto-invite: if the candidate's email domain is on the
+    // admin-configured list and an approved question bank exists for this
+    // posting, skip the recruiter queue and send the interview link directly
+    // to the candidate's inbox. The invite goes to the verified inbox — not
+    // back in the API response — so a spoofed domain buys nothing.
+    let autoInviteSent = false;
+    if (finalStatus === "Applied" && standardAiRequested && !manualReviewRequested) {
+      try {
+        const settings = await getSparkSettings();
+        if (
+          settings.autoInviteEnabled &&
+          emailMatchesAutoAcceptDomain(email, settings.autoAcceptDomains)
+        ) {
+          const approvedBank = await getApprovedQuestionBankForPosting(posting.id);
+          const snapshotQuestions = interviewQuestionsFromBank(approvedBank);
+          if (snapshotQuestions.length > 0) {
+            const token = interviewToken();
+            const origin = new URL(request.url).origin;
+            const inviteUrl = `${origin}/interview/${token}`;
+            const expiresAt = new Date(
+              Date.now() + 7 * 24 * 60 * 60 * 1000
+            ).toISOString();
+            const session = {
+              token,
+              status: "invited",
+              inviteUrl,
+              invitedAt: now,
+              expiresAt,
+              questionBankId: approvedBank?.id ?? null,
+              questionBankApprovedAt: approvedBank?.approvedAt ?? null,
+              questions: snapshotQuestions,
+              autoInvited: true,
+            };
+
+            const delivery = await sendSparkAutoInterviewInvite({
+              applicationId: application.id,
+              recipientEmail: email,
+              candidateName,
+              jobTitle: posting.title,
+              clientName: posting.clientName,
+              interviewUrl: inviteUrl,
+            });
+
+            if (delivery.ok) {
+              const autoInviteCommState = appendCommunicationEvents(
+                communicationState,
+                [
+                  {
+                    type: "auto_interview_invite_sent",
+                    label: "Auto-invite sent",
+                    at: now,
+                    channel: "candidate",
+                    messagePreview:
+                      "Trusted email domain — candidate fast-tracked to AI screening. Interview link sent to inbox.",
+                    screeningPathway: resolvedScreeningPathway,
+                    consentVersion: SPARK_CONSENT_VERSION,
+                    delivery: {
+                      provider: delivery.provider,
+                      downstreamProvider: delivery.downstreamProvider,
+                      status: "sent",
+                      providerMessageId: delivery.providerMessageId,
+                      from: delivery.from,
+                    },
+                  },
+                ],
+                preferredChannel
+              );
+
+              await updateApplication(application.id, {
+                status: "InterviewInvited",
+                interviewMedia: { session } as JsonValue,
+                communicationState: autoInviteCommState as JsonValue,
+              });
+
+              autoInviteSent = true;
+            } else {
+              console.error(
+                "Spark auto-invite email failed:",
+                delivery.errorCode
+              );
+              // Non-fatal: application stays in recruiter queue.
+            }
+          }
+        }
+      } catch (autoInviteError) {
+        console.error("Spark auto-invite error:", autoInviteError);
+        // Non-fatal: application stays in recruiter queue.
+      }
+    }
+
     return NextResponse.json({
       success: true,
       applicationId: application.id,
       status: application.status,
       interviewUrl: null,
-      nextStep: manualReviewRequested
-        ? "Your profile is queued for manual recruiter review. A recruiter may contact you for next steps."
-        : "Your profile is queued for recruiter review. If approved, Spark will send the short interview link.",
+      nextStep: autoInviteSent
+        ? "You've been fast-tracked — check your email for your AI screening link."
+        : manualReviewRequested
+          ? "Your profile is queued for manual recruiter review. A recruiter may contact you for next steps."
+          : "Your profile is queued for recruiter review. If approved, Spark will send the short interview link.",
     });
   } catch (error) {
     console.error("Spark application error:", error);
