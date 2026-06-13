@@ -6,6 +6,7 @@ import {
   Camera,
   CheckCircle2,
   Loader2,
+  Mic,
   Pencil,
   PhoneOff,
   Play,
@@ -24,7 +25,7 @@ type SparkInterviewSessionProps = {
   questions: InterviewQuestion[];
 };
 
-type InterviewPhase = "ready" | "active" | "completed";
+type InterviewPhase = "ready" | "reading" | "active" | "completed";
 type CameraFacing = "user" | "environment";
 
 type Answer = {
@@ -88,6 +89,10 @@ const RECORDING_CHUNK_MS = 6_000;
 // that question by reusing the normal submit path (capture + queue + advance,
 // or complete on the last question) so the candidate never loses the clip.
 const MAX_ANSWER_SECONDS = 300;
+// Read gate: before recording starts on each question, the candidate sees the
+// question with a short countdown so they can read it and compose themselves.
+// Recording (and the 5-minute answer cap) only begins once the gate ends.
+const READ_GATE_SECONDS = 10;
 
 function browserSignals() {
   return {
@@ -186,6 +191,10 @@ export function SparkInterviewSession({
   // Guards the 5-minute auto-submit so it fires once per question and never
   // races a manual Next/Submit tap.
   const autoSubmittingRef = useRef(false);
+  // Read gate: countdown timer + a once-guard so the gate begins recording
+  // exactly once (the tick and the "Start answering now" tap can't double-fire).
+  const readTimerRef = useRef<number | null>(null);
+  const readDoneRef = useRef(false);
 
   const [phase, setPhase] = useState<InterviewPhase>(
     initialStatus === "completed" || initialStatus === "InterviewCompleted"
@@ -213,6 +222,7 @@ export function SparkInterviewSession({
   const [questionMode, setQuestionMode] = useState<"spoken" | "typed">("spoken");
   const [typedReason, setTypedReason] = useState<TypedReason>("cant_speak");
   const [reasonOpen, setReasonOpen] = useState(false);
+  const [readCountdown, setReadCountdown] = useState(READ_GATE_SECONDS);
 
   const currentQuestion = questions[questionIndex] || questions[0];
   const currentQuestionText = currentQuestion?.text || "";
@@ -221,6 +231,7 @@ export function SparkInterviewSession({
     return () => {
       streamRef.current?.getTracks().forEach((track) => track.stop());
       if (timerRef.current) window.clearInterval(timerRef.current);
+      if (readTimerRef.current) window.clearInterval(readTimerRef.current);
     };
   }, []);
 
@@ -425,16 +436,11 @@ export function SparkInterviewSession({
   const startInterview = async () => {
     setLoading(true);
     try {
-      const stream = streamRef.current || (await requestMediaStream(cameraFacing));
-      autoSubmittingRef.current = false;
-      startRecording(stream);
-      const startedAt = Date.now();
-      startedAtRef.current = startedAt;
-      setRecordingElapsed(0);
-      if (timerRef.current) window.clearInterval(timerRef.current);
-      timerRef.current = window.setInterval(() => {
-        setRecordingElapsed(Math.max(1, Math.round((Date.now() - startedAt) / 1000)));
-      }, 1000);
+      // Make sure camera/mic are live, then mark the interview started. Recording
+      // does not begin here — the read gate shows Q1 first and starts the clip.
+      await (streamRef.current
+        ? Promise.resolve(streamRef.current)
+        : requestMediaStream(cameraFacing));
 
       const response = await fetch(`/api/spark/interviews/${token}/start`, {
         method: "POST",
@@ -445,11 +451,11 @@ export function SparkInterviewSession({
         throw new Error(result.error || "Unable to start interview.");
       }
 
-      setPhase("active");
-      toast.success("Interview started.");
+      enterReadGate();
     } catch (error) {
       streamRef.current?.getTracks().forEach((track) => track.stop());
       if (timerRef.current) window.clearInterval(timerRef.current);
+      if (readTimerRef.current) window.clearInterval(readTimerRef.current);
       toast.error(
         error instanceof Error
           ? error.message
@@ -517,6 +523,40 @@ export function SparkInterviewSession({
     }, 1000);
   };
 
+  // Read gate: show the question with a countdown (camera live, NOT recording),
+  // then start recording automatically. Used before every spoken question so
+  // candidates can read and compose themselves before the clip begins.
+  const enterReadGate = () => {
+    if (timerRef.current) window.clearInterval(timerRef.current);
+    if (readTimerRef.current) window.clearInterval(readTimerRef.current);
+    autoSubmittingRef.current = false;
+    readDoneRef.current = false;
+    setRecordingElapsed(0);
+    setReadCountdown(READ_GATE_SECONDS);
+    setPhase("reading");
+    const startedAt = Date.now();
+    // Compute remaining from wall-clock so a throttled tab still ends on time.
+    readTimerRef.current = window.setInterval(() => {
+      const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+      const remaining = Math.max(0, READ_GATE_SECONDS - elapsed);
+      setReadCountdown(remaining);
+      if (remaining <= 0) beginAnswering();
+    }, 250);
+  };
+
+  // Leave the read gate and start the actual recording. Guarded so the tick at
+  // 0 and a manual "Start answering now" tap can never both fire it.
+  const beginAnswering = () => {
+    if (readDoneRef.current) return;
+    readDoneRef.current = true;
+    if (readTimerRef.current) {
+      window.clearInterval(readTimerRef.current);
+      readTimerRef.current = null;
+    }
+    beginQuestionRecording();
+    setPhase("active");
+  };
+
   const stopAndDiscardRecording = () => {
     const recorder = recorderRef.current;
     if (recorder && recorder.state !== "inactive") {
@@ -540,7 +580,7 @@ export function SparkInterviewSession({
     setQuestionMode("spoken");
     setReasonOpen(false);
     setCurrentAnswer("");
-    beginQuestionRecording();
+    enterReadGate();
   };
 
   // Capture the current answer quickly: stop the recorder (spoken) or read the
@@ -675,7 +715,7 @@ export function SparkInterviewSession({
     setCurrentAnswer("");
     setQuestionMode("spoken");
     setReasonOpen(false);
-    beginQuestionRecording();
+    enterReadGate();
   };
 
   const completeInterview = async () => {
@@ -689,6 +729,7 @@ export function SparkInterviewSession({
     try {
       streamRef.current?.getTracks().forEach((track) => track.stop());
       if (timerRef.current) window.clearInterval(timerRef.current);
+      if (readTimerRef.current) window.clearInterval(readTimerRef.current);
       // Wait for every per-question upload + transcription to finish.
       await Promise.allSettled(answerTasksRef.current);
       await waitForBackgroundUploads();
@@ -889,6 +930,113 @@ export function SparkInterviewSession({
               </Button>
             </>
           )}
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === "reading") {
+    const ringSize = 72;
+    const ringRadius = 30;
+    const ringCirc = 2 * Math.PI * ringRadius;
+    const ringOffset = ringCirc * (1 - readCountdown / READ_GATE_SECONDS);
+    return (
+      <div className="flex min-h-[720px] flex-col bg-[var(--sn-soft)]">
+        <header className="spark-mobile-header px-5 pb-4 pt-16">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-extrabold uppercase tracking-normal text-[var(--sn-blue-700)]">
+                Get ready
+              </p>
+              <h1 className="mt-1 text-lg font-extrabold text-[var(--sn-ink)]">
+                Question {questionIndex + 1} of {questions.length}
+              </h1>
+            </div>
+            <span className="sn-chip sn-chip-coral">Not recording yet</span>
+          </div>
+        </header>
+
+        <div className="flex-1 space-y-4 px-4 py-4">
+          <section className="relative mx-auto aspect-[9/16] max-h-[52vh] w-full max-w-sm overflow-hidden rounded-lg bg-[#111827]">
+            <div className="absolute left-3 top-3 z-10 inline-flex items-center gap-2 rounded-full bg-black/55 px-3 py-1 text-xs font-extrabold text-white backdrop-blur">
+              <span className="h-2 w-2 rounded-full bg-[var(--sn-coral)]" />
+              Camera on · not recording
+            </div>
+            <video
+              ref={videoRef}
+              className={`h-full w-full object-cover ${
+                cameraFacing === "user" ? "scale-x-[-1]" : ""
+              }`}
+              autoPlay
+              muted
+              playsInline
+            />
+          </section>
+
+          <section className="sn-card p-4">
+            <p className="text-sm font-extrabold uppercase tracking-wide text-[var(--sn-coral)]">
+              Read this — then answer out loud
+            </p>
+            <h2 className="mt-2 text-lg font-extrabold leading-7 text-[var(--sn-ink)]">
+              {currentQuestionText}
+            </h2>
+
+            <div className="mt-4 flex items-center gap-4 rounded-lg border border-[var(--sn-line)] bg-[var(--sn-soft)] p-3">
+              <div className="relative shrink-0" style={{ width: ringSize, height: ringSize }}>
+                <svg
+                  width={ringSize}
+                  height={ringSize}
+                  viewBox={`0 0 ${ringSize} ${ringSize}`}
+                  className="-rotate-90"
+                >
+                  <circle
+                    cx={ringSize / 2}
+                    cy={ringSize / 2}
+                    r={ringRadius}
+                    fill="none"
+                    stroke="var(--sn-line)"
+                    strokeWidth="6"
+                  />
+                  <circle
+                    cx={ringSize / 2}
+                    cy={ringSize / 2}
+                    r={ringRadius}
+                    fill="none"
+                    stroke="var(--sn-coral)"
+                    strokeWidth="6"
+                    strokeLinecap="round"
+                    strokeDasharray={ringCirc}
+                    strokeDashoffset={ringOffset}
+                    style={{ transition: "stroke-dashoffset 1s linear" }}
+                  />
+                </svg>
+                <span className="absolute inset-0 flex items-center justify-center text-xl font-extrabold text-[var(--sn-ink)]">
+                  {readCountdown}
+                </span>
+              </div>
+              <div>
+                <p className="text-sm font-extrabold text-[var(--sn-ink)]">
+                  Recording starts in {readCountdown}s
+                </p>
+                <p className="mt-1 text-xs font-bold leading-5 text-[var(--sn-muted)]">
+                  Take a breath and look at the camera. Ready early? Tap Start
+                  answering now.
+                </p>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div className="sticky bottom-0 border-t border-[var(--sn-line)] bg-white p-4">
+          <Button
+            type="button"
+            className="sn-button-coral h-12 w-full text-base font-extrabold"
+            onClick={beginAnswering}
+            disabled={loading}
+          >
+            <Mic className="h-4 w-4" />
+            Start answering now
+          </Button>
         </div>
       </div>
     );
