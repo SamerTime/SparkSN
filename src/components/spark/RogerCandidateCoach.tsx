@@ -150,11 +150,22 @@ export function RogerCandidateCoach({
     try {
       // Always transcribe any pending spoken clips first — Re-run used to skip
       // this and analyze with empty answers, returning a useless result.
+      // Transcription failures are surfaced, not swallowed: a candidate whose
+      // clips all fail to transcribe must not look like an empty interview.
+      let transcribeFailureNote = "";
       try {
-        await fetch(
+        const tRes = await fetch(
           `/api/spark/applications/${applicationId}/transcribe-clips`,
           { method: "POST" }
         );
+        const tData = await tRes.json().catch(() => null);
+        const failed =
+          typeof tData?.failed === "number" ? tData.failed : 0;
+        if (failed > 0) {
+          const firstError = str(obj(arr(tData?.failures)[0]).error);
+          transcribeFailureNote = `${failed} clip${failed === 1 ? "" : "s"} failed to transcribe${firstError ? ` — ${firstError}` : ""}`;
+          flash(`Transcription incomplete: ${transcribeFailureNote}`);
+        }
       } catch {
         // Resilient — proceed to analysis with whatever transcripts exist.
       }
@@ -163,7 +174,12 @@ export function RogerCandidateCoach({
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success) {
-        throw new Error(data?.error || `Analysis failed (${res.status})`);
+        const baseError = data?.error || `Analysis failed (${res.status})`;
+        throw new Error(
+          transcribeFailureNote
+            ? `${baseError} (${transcribeFailureNote})`
+            : baseError
+        );
       }
       const parsed = parseAnalysis(data.analysis);
       setAnalysis(parsed);
@@ -172,7 +188,11 @@ export function RogerCandidateCoach({
         setAppliesTo(parsed.suggested_lesson.applies_to);
         setOrigLesson(parsed.suggested_lesson.lesson);
       }
-      flash("Roger analysis complete.");
+      flash(
+        transcribeFailureNote
+          ? `Roger analysis complete, but ${transcribeFailureNote}.`
+          : "Roger analysis complete."
+      );
     } catch (error) {
       flash(`Analysis failed: ${error instanceof Error ? error.message : "error"}`);
     } finally {
