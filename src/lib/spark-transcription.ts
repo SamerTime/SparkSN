@@ -15,7 +15,7 @@ function str(value: unknown): string {
 
 type WhisperResult = { text?: string };
 type AiBinding = {
-  run: (model: string, input: { audio: number[] }) => Promise<WhisperResult>;
+  run: (model: string, input: { audio: string }) => Promise<WhisperResult>;
 };
 
 /** Path of the candidate's stored recording, or "" if none. */
@@ -57,7 +57,12 @@ export async function transcribeRecordingAtPath(path: string): Promise<string> {
     );
   }
 
-  const bytes = new Uint8Array(await data.arrayBuffer());
+  // Base64 the clip for whisper-large-v3-turbo. The previous @cf/openai/whisper
+  // model required `audio: number[]` — Array.from() on a multi-MB clip inflated
+  // memory ~8x (a 14MB five-minute answer became a ~60-110MB JS array), which
+  // blew the Worker's 128MB isolate limit and silently killed transcription for
+  // every long-form candidate. Base64 costs ~1.3x instead.
+  const audio = Buffer.from(await data.arrayBuffer()).toString("base64");
 
   const env = getCloudflareContext().env as unknown as { AI?: AiBinding };
   if (!env.AI) {
@@ -66,8 +71,8 @@ export async function transcribeRecordingAtPath(path: string): Promise<string> {
     );
   }
 
-  const result = await env.AI.run("@cf/openai/whisper", {
-    audio: Array.from(bytes),
+  const result = await env.AI.run("@cf/openai/whisper-large-v3-turbo", {
+    audio,
   });
   const text = str(result.text).trim();
   if (!text) {

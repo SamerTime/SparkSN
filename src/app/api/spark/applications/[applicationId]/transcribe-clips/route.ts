@@ -65,32 +65,69 @@ export async function POST(
       ? [...(transcript.answers as unknown[])]
       : [];
 
-    // Run pending Whisper calls in PARALLEL — for 10 clips this cuts a ~30-80s
-    // sequential pass down to roughly the slowest single clip (~5-10s). Each
-    // clip keeps its own try/catch so one failure (e.g. an oversized 5-minute
-    // clip) does not fail the batch.
-    const transcribeTasks = answers.map(async (raw, i) => {
+    // Transcribe pending clips with BOUNDED concurrency. Full parallelism
+    // (Promise.all over 10 clips) held every clip's bytes + base64 in memory at
+    // once and OOM'd the Worker's 128MB isolate on long answers — killing the
+    // whole request before any transcript was saved. Two at a time keeps peak
+    // memory safe while still overlapping Whisper round-trips. Each clip keeps
+    // its own try/catch so one failure does not fail the batch, and every
+    // failure is COLLECTED and returned so the UI can surface it instead of
+    // reporting a silent `transcribed: 0` success.
+    const pendingIndexes = answers.flatMap((raw, i) => {
       const answer = obj(raw);
       const clipPath = str(answer.clipPath);
       const existing = str(answer.transcript) || str(answer.answer);
       // Only spoken clips without a transcript yet (idempotent).
-      if (!clipPath || existing) return false;
-      try {
-        const text = (await transcribeRecordingAtPath(clipPath)).trim();
-        if (!text) return false;
-        // The recruiter view reads `.answer`; keep `.transcript` in sync.
-        answers[i] = { ...answer, transcript: text, answer: text };
-        return true;
-      } catch (clipError) {
-        console.error(
-          `Spark clip transcription failed for ${clipPath}:`,
-          clipError
-        );
-        return false;
-      }
+      return clipPath && !existing ? [i] : [];
     });
-    const results = await Promise.all(transcribeTasks);
-    const transcribed = results.filter(Boolean).length;
+
+    const failures: Array<{ questionIndex: number; clipPath: string; error: string }> =
+      [];
+    let transcribed = 0;
+    let cursor = 0;
+    const TRANSCRIBE_CONCURRENCY = 2;
+
+    async function transcribeNext() {
+      while (cursor < pendingIndexes.length) {
+        const i = pendingIndexes[cursor++];
+        const answer = obj(answers[i]);
+        const clipPath = str(answer.clipPath);
+        try {
+          const text = (await transcribeRecordingAtPath(clipPath)).trim();
+          if (!text) {
+            failures.push({
+              questionIndex: i,
+              clipPath,
+              error: "Transcription returned empty text.",
+            });
+            continue;
+          }
+          // The recruiter view reads `.answer`; keep `.transcript` in sync.
+          answers[i] = { ...answer, transcript: text, answer: text };
+          transcribed += 1;
+        } catch (clipError) {
+          console.error(
+            `Spark clip transcription failed for ${clipPath}:`,
+            clipError
+          );
+          failures.push({
+            questionIndex: i,
+            clipPath,
+            error:
+              clipError instanceof Error
+                ? clipError.message
+                : "Unknown transcription error.",
+          });
+        }
+      }
+    }
+
+    await Promise.all(
+      Array.from(
+        { length: Math.min(TRANSCRIBE_CONCURRENCY, pendingIndexes.length) },
+        () => transcribeNext()
+      )
+    );
 
     if (transcribed > 0) {
       const nextTranscript = {
@@ -104,7 +141,12 @@ export async function POST(
       );
     }
 
-    return NextResponse.json({ success: true, transcribed });
+    return NextResponse.json({
+      success: true,
+      transcribed,
+      failed: failures.length,
+      failures,
+    });
   } catch (error) {
     console.error("Spark transcribe-clips error:", error);
     return NextResponse.json(
